@@ -89,6 +89,17 @@ CheckOptions:
   readability-identifier-naming.MacroDefinitionCase: 'UPPER_CASE'
   readability-identifier-naming.GlobalVariablePrefix: 'g_'
   readability-identifier-naming.GlobalConstantPrefix: 'k_'
-  # SystemInit is named by the ARM startup code, which calls it by that symbol.
-  # The underscore form covers the newlib syscall stubs (_write, _sbrk).
-  readability-identifier-naming.FunctionIgnoredRegexp: 'SystemInit|_[a-z_]+'
+  # Three groups of names this project does not get to choose:
+  #
+  #   SystemInit          called by the ARM startup code, by that exact symbol.
+  #   _[a-z_]+            the newlib syscall stubs (_write, _sbrk).
+  #   .*_Handler          the fault and interrupt vectors. The startup file
+  #                       declares each one .weak and aliases it to
+  #                       Default_Handler; a strong definition only overrides
+  #                       the alias if the symbol matches CHARACTER FOR
+  #                       CHARACTER. Renaming HardFault_Handler to
+  #                       hard_fault_handler would still compile, still link,
+  #                       and silently go back to the infinite loop, which is
+  #                       precisely the silence Src/fault.c exists to remove.
+  #                       This exemption is load-bearing, not cosmetic.
+  readability-identifier-naming.FunctionIgnoredRegexp: 'SystemInit|_[a-z_]+|.*_Handler'

@@ -1,0 +1,93 @@
+@startuml fault-signal
+' What happens when the processor faults, before and after.
+' Grounded in Src/fault.c, Inc/fault.h, Startup/startup_stm32l476rgtx.s
+' (the weak aliases) and tests/fault_test.c.
+
+title A fault that says something, instead of going quiet
+
+skinparam shadowing false
+
+rectangle "Before" as B #ffdddd {
+  card "any fault" as Bf
+  card "vector table" as Bv
+  card "Default_Handler:\n  b Infinite_Loop" as Bd
+  card "board stops.\nLED unchanged, serial silent." as Bs
+
+  Bf --> Bv
+  Bv --> Bd
+  Bd --> Bs
+}
+
+rectangle "After" as A #ddffdd {
+  card "any fault" as Af
+  card "vector table" as Av
+  card "HardFault_Handler\nMemManage_Handler\nBusFault_Handler\nUsageFault_Handler" as Ah
+  card "fault_trap(kind)" as At
+  card "LED blinks a COUNT, forever" as Ab
+
+  Af --> Av
+  Av --> Ah
+  Ah --> At
+  At --> Ab
+}
+
+note bottom of Bs
+  Indistinguishable from a working
+  board that happens to be idle.
+  You find out only because the
+  button stopped responding.
+end note
+
+note bottom of Ab
+  2 blinks  hard fault
+  3 blinks  memory management
+  4 blinks  bus fault
+  5 blinks  usage fault
+
+  Counted from across the room,
+  with no debugger attached.
+end note
+
+note as How
+  **How the override works**
+
+  The startup file declares each handler
+  .weak and aliases it to Default_Handler.
+  Defining the same symbols in fault.c
+  replaces those aliases at link time.
+
+  The vendor-generated startup file is
+  never edited. Verified by dumping the
+  linked vector table: offset 0x0C holds
+  0x080004c1, which is HardFault_Handler,
+  not Default_Handler.
+end note
+
+note as Safe
+  **Why a nop loop and not the millisecond clock**
+
+  A fault handler must not depend on SysTick
+  still running, on interrupts, or on any
+  state the fault may have corrupted.
+
+  board_init runs again first: if the fault
+  hit before main got that far, the GPIO clock
+  would still be gated off and the LED would
+  stay dark, which is the exact silence this
+  file exists to remove.
+end note
+
+note as Tested
+  **What a host test can and cannot check**
+
+  Cannot: that the LED lights, or that the
+  vector table is right. Those are answered
+  by the board and by objdump.
+
+  Can: that four faults map to four DIFFERENT
+  counts, each between 2 and 9. Two faults
+  blinking the same number carry no more
+  information than a dead board.
+end note
+
+@enduml

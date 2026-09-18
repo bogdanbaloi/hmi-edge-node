@@ -1,7 +1,7 @@
 # Host build for the tests. Nothing here goes near the board: it compiles the
-# pure-logic sources (Src/telemetry.c, Src/temperature.c) with a normal
-# desktop compiler, so `mingw32-make -C tests run` is a red/green check on
-# both the wire protocol and the conversion maths.
+# pure-logic sources with a normal desktop compiler, so
+# `mingw32-make -C tests run` is a red/green check on the wire protocol, the
+# conversion maths and the fault blink patterns.
 #
 # No test framework and no package to install: the toolchain is whatever
 # clang or gcc is already on PATH.
@@ -12,8 +12,9 @@ CFLAGS := -std=c11 -Wall -Wextra -Werror -pedantic -O1 -I../Inc -I.
 
 CONTRACT_SRC := contract_frame_test.c frame_gate.c ../Src/telemetry.c
 TEMP_SRC     := temperature_test.c ../Src/temperature.c
+FAULT_SRC    := fault_test.c ../Src/fault.c
 
-TARGETS := contract_frame_test temperature_test
+TARGETS := contract_frame_test temperature_test fault_test
 
 .PHONY: all run clean
 
@@ -28,9 +29,17 @@ contract_frame_test: $(CONTRACT_SRC) frame_gate.h ../Inc/telemetry.h \
 temperature_test: $(TEMP_SRC) ../Inc/temperature.h
 	$(CC) $(CFLAGS) -o $@ $(TEMP_SRC)
 
+# board.c is NOT linked here. It exists only to write to fixed register
+# addresses, which means nothing on a PC. The two board symbols that fault.c
+# references are stubbed inside fault_test.c instead, so the link stays honest
+# about what is and is not present.
+fault_test: $(FAULT_SRC) ../Inc/fault.h
+	$(CC) $(CFLAGS) -o $@ $(FAULT_SRC)
+
 run: $(TARGETS)
 	./contract_frame_test
 	./temperature_test
+	./fault_test
 
 clean:
 	rm -f $(TARGETS) $(addsuffix .exe,$(TARGETS))
