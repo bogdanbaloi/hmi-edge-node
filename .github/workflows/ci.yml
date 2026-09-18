@@ -11,6 +11,16 @@
 #
 # None of it needs a board: telemetry and temperature are pure logic on
 # purpose, which is what makes them reachable from a runner.
+#
+# The runner image is PINNED to ubuntu-24.04 rather than ubuntu-latest, and
+# that is deliberate. On 2026-10-19 the ubuntu-latest label moves to Ubuntu 26,
+# which changes the apt versions of gcc-arm-none-eabi and clang-tidy, the two
+# things the firmware and lint jobs stand on. Pinned, the migration happens on
+# a day someone chose, with a red build to look at on purpose. Unpinned, it
+# happens on a morning when the badge is already red on a public repo.
+#
+# So: do not "helpfully" put ubuntu-latest back. Bump the pin when you are
+# ready to deal with what the new image changes.
 
 name: CI
 
@@ -27,9 +37,9 @@ concurrency:
 jobs:
   tests:
     name: Host tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Compiler version
         run: cc --version
@@ -41,9 +51,9 @@ jobs:
 
   firmware:
     name: Cross-compile for Cortex-M4
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install the ARM toolchain
         run: |
@@ -72,9 +82,9 @@ jobs:
 
   lint:
     name: Static analysis
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install clang-tidy
         run: |
@@ -115,9 +125,9 @@ jobs:
 
   docs:
     name: Docs discipline
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install doxygen and plantuml
         run: |
