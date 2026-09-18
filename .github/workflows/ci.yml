@@ -1,0 +1,99 @@
+
+# CI for hmi-edge-node.
+#
+# The point of this file is that a pull request MEANS something here. Without
+# it a green Merge button gates nothing. Three jobs, three different questions:
+#
+#   tests     does the logic still do what it claims, on a host, in seconds
+#   firmware  does it still build and LINK for the real Cortex-M4
+#   docs      is the documentation discipline actually being followed
+#
+# None of it needs a board: telemetry and temperature are pure logic on
+# purpose, which is what makes them reachable from a runner.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push to the same branch supersedes the old run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Host tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compiler version
+        run: cc --version
+
+      # The Makefile builds with -Wall -Wextra -Werror -pedantic, so a new
+      # warning fails here before anyone reads the assertions.
+      - name: Build and run
+        run: make -C tests run
+
+  firmware:
+    name: Cross-compile for Cortex-M4
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the ARM toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi \
+                                  libnewlib-arm-none-eabi
+
+      - name: Compiler version
+        run: arm-none-eabi-gcc --version
+
+      # Same flags STM32CubeIDE uses, so a green job means the real build is
+      # green. A full LINK, not just compilation: a missing symbol or an
+      # overflowing section only shows up at link time.
+      - name: Build and link
+        run: |
+          arm-none-eabi-gcc \
+            -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard \
+            -std=gnu11 -Wall -Wextra -Werror -O1 -IInc \
+            --specs=nano.specs --specs=nosys.specs \
+            -T STM32L476RGTX_FLASH.ld \
+            Src/*.c Startup/startup_stm32l476rgtx.s \
+            -o firmware.elf
+
+      - name: Size
+        run: arm-none-eabi-size firmware.elf
+
+  docs:
+    name: Docs discipline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install doxygen and plantuml
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y doxygen plantuml
+
+      # The charter requires every new piece to carry a diagram validated with
+      # -checkonly. This is that rule, enforced instead of remembered.
+      - name: Validate the diagrams
+        run: plantuml -checkonly docs/uml/*.puml
+
+      # Doxygen prints warnings without failing, so the warnings are turned
+      # into the failure themselves.
+      - name: Build the API reference, warnings are failures
+        run: |
+          mkdir -p build/doxygen
+          doxygen docs/Doxyfile 2>doxygen.log
+          if [ -s doxygen.log ]; then
+            echo "Doxygen reported warnings:"
+            cat doxygen.log
+            exit 1
+          fi
+          echo "No warnings."
