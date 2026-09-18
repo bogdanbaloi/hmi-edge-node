@@ -57,8 +57,13 @@ uint32_t temperature_cal_usable(const temperature_cal_t *cal) {
     return 1U;
 }
 
-int32_t temperature_deci_celsius(const temperature_cal_t *cal, uint32_t ts_raw,
-                                 uint32_t vrefint_raw) {
+int32_t temperature_deci_celsius(const temperature_cal_t *cal, ts_counts_t ts,
+                                 vrefint_counts_t vref) {
+    /* Unwrapped once, here. Past this line they are plain numbers again, but
+       they arrived correctly labelled and that is the point. */
+    const uint32_t ts_raw      = ts.counts;
+    const uint32_t vrefint_raw = vref.counts;
+
     if (!temperature_cal_usable(cal) || (vrefint_raw == 0U)) {
         return TEMPERATURE_INVALID;
     }
