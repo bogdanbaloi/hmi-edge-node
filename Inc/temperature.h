@@ -26,9 +26,11 @@
  *
  * ## The maths, in integers
  *
- * No floating point: the FPU is not enabled on this bare-metal build, so a
- * float operation would fault. Everything is `int32_t`, and the result is in
- * TENTHS of a degree, which is what the wire format wants (`temp,23.5`).
+ * No floating point, by choice rather than by necessity. The FPU is enabled at
+ * startup (see core_enable_fpu), so a float would work, but a tenth of a
+ * degree is already finer than the sensor's accuracy. Everything is `int32_t`,
+ * and the result is in TENTHS of a degree, which is what the wire format wants
+ * (`temp,23.5`).
  *
  *     deci = 300 + (1000 * (ts_corrected - TS_CAL1)) / (TS_CAL2 - TS_CAL1)
  *

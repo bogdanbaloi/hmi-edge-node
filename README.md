@@ -36,10 +36,14 @@ calibration line expects, so applying it directly reads a 30 °C die as −0.7 �
 wrong by thirty degrees, and plausible enough that nobody notices. Reading
 VREFINT (a bandgap reference, steady against VDDA) recovers the scale factor.
 
-The arithmetic is **integer only** -- the FPU is not enabled on this build, so a
-float operation would fault -- and the result is in tenths of a degree, which is
-exactly what the wire format wants. The whole conversion costs 162 bytes of
-Thumb code and pulls in no runtime helpers.
+The arithmetic is **integer only**, and the result is in tenths of a degree,
+which is exactly what the wire format wants. The whole conversion costs 162
+bytes of Thumb code and pulls in no runtime helpers.
+
+That choice predates the FPU being switched on (see below) and survives it: a
+tenth of a degree is finer than the sensor's accuracy, so a float would buy
+precision the hardware does not have, at the cost of size and of rounding that
+has to be undone before printing.
 
 When no honest reading exists (blank calibration, a dead reference, a result
 outside the sensor's range) the firmware **omits the temperature frame** rather
