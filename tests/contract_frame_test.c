@@ -187,6 +187,26 @@ static void frame_gate_selfcheck(void) {
     CHECK(r.count == 1U);
     CHECK_STR(r.items[0].sensor_id, "temp");
     CHECK(r.trailing == 1U);
+
+    /* The next two samples were added on the HOST side after this firmware
+       started reporting degrees, to pin the two consequences of that change.
+       They are copied here for the same reason as the rest: the gate has to
+       track the host's test, not the other way round. */
+
+    /* NegativeTemperatureValueParses -- a sub-zero reading carries a leading
+       minus, and the host keeps the value as opaque text. */
+    frame_gate_consume("temp,-3.5\n", &r);
+    CHECK(r.count == 1U);
+    CHECK_STR(r.items[0].sensor_id, "temp");
+    CHECK_STR(r.items[0].value, "-3.5");
+
+    /* PressWithoutTemperatureYieldsOnlyTheStateFrame -- the device drops the
+       temperature frame when it has no valid reading, so one press can arrive
+       as a single frame. Nothing pairs the two. */
+    frame_gate_consume("equipment/3/state,on\n", &r);
+    CHECK(r.count == 1U);
+    CHECK_STR(r.items[0].sensor_id, "equipment/3/state");
+    CHECK_STR(r.items[0].value, "on");
 }
 
 /* ------------------------------------------------------------------ */
