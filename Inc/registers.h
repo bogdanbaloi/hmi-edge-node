@@ -47,6 +47,7 @@
 /* ---- ADC1 @ 0x50040000, common regs @ 0x50040300 (internal temp sensor) - */
 #define ADC1_ISR               REG32(0x50040000UL) /* status: ADRDY, EOC     */
 #define ADC1_CR                REG32(0x50040008UL) /* control: enable/cal/reg */
+#define ADC1_SMPR1             REG32(0x50040014UL) /* sample time, ch 0-9     */
 #define ADC1_SMPR2             REG32(0x50040018UL) /* sample time, ch 10-18   */
 #define ADC1_SQR1              REG32(0x50040030UL) /* regular sequence        */
 #define ADC1_DR                REG32(0x50040040UL) /* conversion result       */
@@ -60,8 +61,20 @@
 #define ADC_CR_DEEPPWD         (1UL << 29)         /* deep power-down (reset) */
 #define ADC_CR_ADCAL           (1UL << 31)         /* start calibration       */
 #define ADC_CCR_CKMODE_HCLK1   (1UL << 16)         /* CKMODE=01: clock = HCLK */
+#define ADC_CCR_VREFEN         (1UL << 22)         /* enable VREFINT channel  */
 #define ADC_CCR_TSEN           (1UL << 23)         /* enable temperature sensor */
 #define ADC_TEMP_CHANNEL       17U                 /* temp sensor = ADC1_IN17 */
+#define ADC_VREF_CHANNEL       0U                  /* VREFINT   = ADC1_IN0    */
+
+/* ---- Factory calibration, burned in system memory (RM0351 + datasheet) ---
+ * All three were measured by ST at VDDA = 3.0 V. TS_CAL1 and VREFINT_CAL at
+ * 30 C, TS_CAL2 at 130 C. A Nucleo runs VDDA at 3.3 V, so a raw temperature
+ * reading MUST be rescaled by VREFINT before the calibration line applies --
+ * see temperature.c. They are 16-bit, hence REG16. */
+#define REG16(addr) (*(volatile uint16_t *)(addr))
+#define TS_CAL1_ADDR           REG16(0x1FFF75A8UL) /* temp raw @ 30 C         */
+#define VREFINT_CAL_ADDR       REG16(0x1FFF75AAUL) /* VREFINT raw @ 30 C      */
+#define TS_CAL2_ADDR           REG16(0x1FFF75CAUL) /* temp raw @ 130 C        */
 
 /* Pin numbers within their ports. */
 #define PIN_USART2_TX  2U   /* PA2  */

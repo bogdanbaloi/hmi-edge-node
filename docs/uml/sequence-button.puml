@@ -1,29 +1,44 @@
 @startuml sequence-button
 ' One button press: how it becomes two telemetry frames on the wire.
-' Grounded in Src/main.c (loop), Src/telemetry.c (telemetry_update),
-' Src/board.c, Src/adc.c, Src/uart.c.
+' Grounded in Src/main.c (loop + read_die_temperature), Src/telemetry.c,
+' Src/temperature.c, Src/board.c, Src/adc.c, Src/uart.c.
 
 title Button press -> telemetry frames -> host
 
 skinparam shadowing false
 
 actor Operator
-participant "main loop" as Main
-participant "board"      as Board
-participant "telemetry"  as Tel
-participant "adc"        as Adc
-participant "uart"       as Uart
+participant "main loop"    as Main
+participant "board"        as Board
+participant "telemetry"    as Tel
+participant "adc"          as Adc
+participant "temperature"  as Temp
+participant "uart"         as Uart
 participant "industrial-hmi\nSerialBackend" as Host
 
 Operator -> Board : press B1
 Main -> Board : board_button_pressed()
 Board --> Main : pressed = 1
-Main -> Tel : telemetry_update(pressed,\nadc_temp_read, uart_send_string)
+Main -> Tel : telemetry_update(pressed,\nread_die_temperature, uart_send_string)
 Tel -> Tel : press edge? toggle equipment_on
 Tel -> Uart : sink("equipment/0/state,on\\n")
-Tel -> Adc  : read_temp()
-Adc --> Tel : raw ADC counts
-Tel -> Uart : sink("temp,<raw>\\n")
+
+Tel -> Main : read_die_temperature()
+Main -> Adc  : adc_temp_read()
+Adc --> Main : ts_raw (channel 17)
+Main -> Adc  : adc_vref_read()
+Adc --> Main : vrefint_raw (channel 0)
+Main -> Temp : temperature_deci_celsius(cal,\nts_raw, vrefint_raw)
+Temp -> Temp : rescale for VDDA, apply\nthe factory line, sanity-check
+Temp --> Main : tenths of a degree\n(or TEMPERATURE_INVALID)
+Main --> Tel  : deci
+
+alt a temperature was computed
+  Tel -> Uart : sink("temp,23.5\\n")
+else no honest reading
+  Tel -> Tel : skip the frame entirely
+end
+
 Uart -> Host : bytes over USART2 -> COMx
 Tel --> Main : acted = 1
 Main -> Board : board_led_set(equipment_on)
@@ -31,6 +46,8 @@ Main -> Board : board_led_set(equipment_on)
 note across
   telemetry never touches hardware: it calls the injected
   read_temp() and sink(), so the same code runs in a host test.
+  The adapter lives in main.c because it is the only place the
+  driver and the pure maths meet.
 end note
 
 @enduml

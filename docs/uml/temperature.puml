@@ -1,0 +1,76 @@
+@startuml temperature
+' How raw ADC counts become degrees, and where each guard sits.
+' Grounded in Src/temperature.c, Inc/temperature.h, Src/adc.c, Src/main.c.
+
+title Counts to degrees -- the conversion and its guards
+
+skinparam shadowing false
+
+start
+
+:ts_raw = adc_temp_read()      (channel 17)
+vrefint_raw = adc_vref_read()  (channel 0);
+
+if (calibration usable?) then (no)
+  #ffdddd:blank flash, zero reference,
+  or a zero-width span;
+  :return TEMPERATURE_INVALID;
+  stop
+endif
+
+if (readings within 12-bit scale\nand vrefint_raw non-zero?) then (no)
+  #ffdddd:not a measurement;
+  :return TEMPERATURE_INVALID;
+  stop
+endif
+
+#ddeeff:ts_corrected =
+ts_raw * VREFINT_CAL / vrefint_raw;
+note right
+  THE step that is easy to skip.
+  ST calibrated at VDDA = 3.0 V.
+  A Nucleo runs at 3.3 V, so the
+  same die gives a ~10% smaller
+  count. Applying the line without
+  this rescale reads 30 C as -0.7 C.
+end note
+
+if (ts_corrected within bounds?) then (no)
+  #ffdddd:the reference reading was
+  far off, so the scale is nonsense;
+  :return TEMPERATURE_INVALID;
+  stop
+endif
+
+:deci = 300 + 1000 * (ts_corrected - TS_CAL1)
+             / (TS_CAL2 - TS_CAL1);
+note right
+  Integer arithmetic only. The FPU
+  is not enabled on this build, so
+  a float here would fault. Tenths
+  of a degree is also exactly what
+  the wire format wants.
+end note
+
+if (deci within -50 C .. 150 C?) then (no)
+  #ffdddd:arithmetically fine,
+  physically impossible;
+  :return TEMPERATURE_INVALID;
+  stop
+endif
+
+#ddffdd:return deci;
+:telemetry formats "temp,23.5\n";
+note right
+  Every red path ends in the sentinel,
+  and telemetry then omits the temperature
+  frame. The device reports the state change
+  and stays silent about a temperature it
+  could not compute. A number on the wire
+  that is not a reading is worse than no
+  reading at all.
+end note
+
+stop
+
+@enduml

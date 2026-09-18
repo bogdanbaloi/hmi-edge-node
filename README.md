@@ -16,11 +16,33 @@ On each press of the USER button (B1) it sends two lines over USART2:
 
 ```
 equipment/0/state,on\n      (toggles on each press)
-temp,<raw>\n                (internal temperature sensor, raw 12-bit ADC counts)
+temp,23.5\n                 (die temperature in Celsius, one decimal)
 ```
 
 The on-board LED (LD2) mirrors the equipment state. Warm the die and the `temp`
 value rises.
+
+### Getting degrees, not counts
+
+The ADC gives raw counts. Turning them into a temperature takes the three
+constants ST burns into system memory at the factory: the sensor's counts at
+30 °C and at 130 °C, plus the internal reference VREFINT.
+
+The catch is that all three were measured at **VDDA = 3.0 V** and a Nucleo runs
+at **3.3 V**. The same die then produces about 10% fewer counts than the
+calibration line expects, so applying it directly reads a 30 °C die as −0.7 °C:
+wrong by thirty degrees, and plausible enough that nobody notices. Reading
+VREFINT (a bandgap reference, steady against VDDA) recovers the scale factor.
+
+The arithmetic is **integer only** -- the FPU is not enabled on this build, so a
+float operation would fault -- and the result is in tenths of a degree, which is
+exactly what the wire format wants. The whole conversion costs 162 bytes of
+Thumb code and pulls in no runtime helpers.
+
+When no honest reading exists (blank calibration, a dead reference, a result
+outside the sensor's range) the firmware **omits the temperature frame** rather
+than sending a sentinel. A number on the wire that is not a reading is worse
+than no reading, because a dashboard cannot tell them apart.
 
 ## The link to industrial-hmi (a protocol, not code)
 
@@ -42,25 +64,33 @@ on a host PC:
 | Layer | Files | Job |
 | --- | --- | --- |
 | HAL / BSP | `board`, `uart`, `adc`, `registers.h` | the only code that touches registers |
-| App | `telemetry` | pure logic: a button edge -> the telemetry frames |
+| App | `telemetry`, `temperature` | pure logic: a button edge -> the frames, and counts -> degrees |
 | Composition | `main.c` | wires the HAL to the app and runs the loop |
 
 `telemetry` depends on injected function pointers (a temperature reader and a
 line sink), so a host test drives it with a fake reader and a capturing sink --
 no board needed to test the frame logic.
 
-## Contract test
+`adc` reports counts and the factory constants but deliberately does **not**
+convert to degrees: that is arithmetic, and it lives in `temperature` where a
+host test can reach it. The adapter that joins the two sits in `main.c`, the
+only place a driver and pure logic are supposed to meet.
 
-The wire protocol is the one thing two independent repos have to agree on, and
-nothing in a compiler checks it. `tests/` closes that gap: a host-compiled test
-that fails the build if this firmware stops emitting what the host can parse.
+## Tests
 
 ```
 mingw32-make -C tests run
 ```
 
 No board, no test framework, no dependency on the other repo -- it compiles the
-pure-logic `Src/telemetry.c` with the desktop compiler already on PATH.
+pure-logic sources with the desktop compiler already on PATH. Two binaries, two
+different questions:
+
+### `contract_frame_test` -- does the wire format still match?
+
+The wire protocol is the one thing two independent repos have to agree on, and
+nothing in a compiler checks it. This closes that gap: the build goes red if
+this firmware stops emitting what the host can parse.
 
 It is built in two layers, and that shape is the point:
 
@@ -74,8 +104,19 @@ once and the contract would break in silence. The gate is anchored to the host's
 own samples, so it cannot be edited into agreement.
 
 Covered: the two frames per press and their order, the on/off toggle, the press
-edge (a held button emits nothing), and the hand-rolled decimal formatting
-across the range of `uint32_t`.
+edge (a held button emits nothing), the decimal formatting including negatives,
+and the case where no temperature is available.
+
+### `temperature_test` -- is the number right?
+
+A separate question, so a separate binary: a red build should say which one
+broke. Covered: both calibration points reproduce exactly, the VDDA correction
+recovers a 30 °C die from a 3.3 V reading, every guard against degenerate input,
+and a sweep of the whole input domain checking monotonicity, which is what
+catches wrapped arithmetic.
+
+One test asserts the *size of the error* you get by skipping the VREFINT
+correction, so that nobody simplifies it away without the build objecting.
 
 ## Pin map
 
@@ -85,6 +126,7 @@ across the range of `uint32_t`.
 | PA5 | LED LD2 (output) |
 | PC13 | USER button B1 (input, internal pull-up; low when pressed) |
 | ADC1 ch17 | internal temperature sensor |
+| ADC1 ch0 | VREFINT, the internal reference used to correct for VDDA |
 
 Clock: the MSI reset clock (4 MHz) -- no PLL setup. USART2 BRR = 35.
 
@@ -105,3 +147,4 @@ port as an argument). Press the button and watch the frames stream.
 - Architecture diagram (HAL / app layering): `docs/uml/architecture.puml`.
 - Sequence (button press to telemetry frames): `docs/uml/sequence-button.puml`.
 - Contract test (how the frames stay pinned to the host): `docs/uml/contract-test.puml`.
+- Counts to degrees (the conversion and its guards): `docs/uml/temperature.puml`.

@@ -15,7 +15,8 @@ package "Composition" {
 }
 
 package "Application (pure logic, host-testable)" {
-  [telemetry] as Tel
+  [telemetry]   as Tel
+  [temperature] as Temp
 }
 
 package "HAL / BSP (the only code that touches registers)" {
@@ -33,10 +34,11 @@ package "Hardware (STM32L476)" {
 
 Main --> Board : init / button / led
 Main --> Uart  : init / send
-Main --> Adc   : init / read
+Main --> Adc   : init / read counts + factory cal
+Main --> Temp  : temperature_deci_celsius(cal,\nts_raw, vrefint_raw)
 Main --> Tel   : telemetry_update(button,\nread_temp, sink)
 
-Tel ..> Adc  : read_temp() injected
+Tel ..> Main : read_temp() injected\n(the adapter that joins adc + temperature)
 Tel ..> Uart : sink() injected
 
 Board --> Regs
@@ -51,6 +53,14 @@ note bottom of Tel
   Depends only on injected function
   pointers, never on registers.
   Unit-testable on a host PC.
+end note
+
+note bottom of Temp
+  Pure integer arithmetic, no FPU.
+  The driver reports counts, this
+  decides what they mean, main.c
+  joins the two. That split is what
+  makes the maths host-testable.
 end note
 
 @enduml

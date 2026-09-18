@@ -22,7 +22,7 @@ package "industrial-hmi (separate repo, no code shared)" {
 
 Test --> Doubles  : injects
 Doubles --> Tel   : drives telemetry_update()
-Tel --> Test      : the exact bytes\n("equipment/0/state,on\\n"\n "temp,<raw>\\n")
+Tel --> Test      : the exact bytes\n("equipment/0/state,on\\n"\n "temp,23.5\\n")
 
 Test --> Gate     : layer 2\nfeed the firmware's bytes
 HostTest ..> Gate : layer 1\nsamples copied verbatim\n("temp,23.5", "a,b,c", ",23", ...)

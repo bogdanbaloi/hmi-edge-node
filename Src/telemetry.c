@@ -6,9 +6,12 @@
 
 #include "telemetry.h"
 
+#include "temperature.h"
+
 #define DECIMAL_BASE 10U
 #define UINT32_MAX_DIGITS 10U  /* 4294967295 */
-#define TEMP_LINE_MAX (UINT32_MAX_DIGITS + 8U)  /* "temp," + digits + "\n\0" */
+/* "temp," + sign + digits + "." + one decimal + "\n\0" */
+#define TEMP_LINE_MAX (UINT32_MAX_DIGITS + 12U)
 
 void telemetry_init(telemetry_state_t *state) {
     state->equipment_on    = 0U;
@@ -27,18 +30,38 @@ static const char *format_uint(uint32_t value, char *out) {
     return &out[i];
 }
 
-/// Build the whole "temp,<raw>\n" line into `line`.
-static void build_temp_line(uint32_t raw, char *line) {
+/// Magnitude of a signed value, without overflowing on INT32_MIN (where
+/// plain negation is undefined).
+static uint32_t absolute(int32_t value) {
+    if (value < 0) {
+        return (uint32_t)(-(value + 1)) + 1U;
+    }
+    return (uint32_t)value;
+}
+
+/// Build the whole "temp,<degrees>\n" line into `line`, one decimal place.
+/// `deci` is in tenths of a degree and may be negative.
+static void build_temp_line(int32_t deci, char *line) {
     char digits[UINT32_MAX_DIGITS + 2U];
-    const char *d = format_uint(raw, digits);
+    const uint32_t magnitude = absolute(deci);
     const char *prefix = "temp,";
     uint32_t p = 0U;
+
     while (*prefix != '\0') {
         line[p++] = *prefix++;
     }
-    while (*d != '\0') {
-        line[p++] = *d++;
+    /* -0.4 must keep its sign: the whole part alone would read as zero. */
+    if (deci < 0) {
+        line[p++] = '-';
     }
+
+    const char *whole = format_uint(magnitude / DECIMAL_BASE, digits);
+    while (*whole != '\0') {
+        line[p++] = *whole++;
+    }
+
+    line[p++] = '.';
+    line[p++] = (char)('0' + (magnitude % DECIMAL_BASE));
     line[p++] = '\n';
     line[p]   = '\0';
 }
@@ -54,9 +77,14 @@ uint32_t telemetry_update(telemetry_state_t *state, uint32_t button_down,
         sink(state->equipment_on ? "equipment/0/state,on\n"
                                  : "equipment/0/state,off\n");
 
-        char line[TEMP_LINE_MAX];
-        build_temp_line(read_temp(), line);
-        sink(line);
+        /* Report a temperature only when there is one. A sentinel on the wire
+           would be a number the host cannot tell apart from a reading. */
+        const int32_t deci = read_temp();
+        if (deci != TEMPERATURE_INVALID) {
+            char line[TEMP_LINE_MAX];
+            build_temp_line(deci, line);
+            sink(line);
+        }
 
         acted = 1U;
     }

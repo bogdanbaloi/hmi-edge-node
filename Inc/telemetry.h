@@ -13,8 +13,10 @@
  * That is the whole point of splitting it from the HAL.
  */
 
-/// Reads a temperature sample (raw ADC counts). On target: adc_temp_read.
-typedef uint32_t (*telemetry_temp_reader_t)(void);
+/// Reads a die temperature in TENTHS of a degree Celsius, or
+/// ::TEMPERATURE_INVALID when none can be computed. On target this is the
+/// adapter in main.c that reads the ADC and applies the factory calibration.
+typedef int32_t (*telemetry_temp_reader_t)(void);
 
 /// Receives one complete line to transmit. On target: uart_send_string.
 typedef void (*telemetry_sink_t)(const char *line);
@@ -31,7 +33,12 @@ void telemetry_init(telemetry_state_t *state);
 /// Call every loop with the current button state. On the press EDGE (was up,
 /// now down) it toggles the equipment state and emits, through `sink`:
 ///     `equipment/0/state,on|off\n`
-///     `temp,<raw>\n`          (raw = read_temp())
+///     `temp,<degrees>\n`      (one decimal, e.g. `temp,23.5` or `temp,-4.2`)
+///
+/// When `read_temp` returns ::TEMPERATURE_INVALID the temperature frame is
+/// SKIPPED entirely: the device reports the state change but does not claim a
+/// temperature it could not compute. The state frame is always sent.
+///
 /// Returns 1 when it acted on an edge (so the caller can update the LED and
 /// debounce), 0 otherwise. Never touches hardware directly.
 uint32_t telemetry_update(telemetry_state_t *state, uint32_t button_down,
