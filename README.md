@@ -8,7 +8,7 @@ world (a button, the MCU's internal temperature sensor) and streams telemetry
 over a serial link to the [industrial-hmi](https://github.com/bogdanbaloi/industrial-hmi) host, which
 toggles a production line in its dashboard.
 
-Written **register-level, no HAL and no CMSIS** -- every peripheral is brought
+Written **register-level, no HAL and no CMSIS**: every peripheral is brought
 up by hand from the reference manual (RM0351). The register map lives in
 `Inc/registers.h`.
 
@@ -53,7 +53,7 @@ than no reading, because a dashboard cannot tell them apart.
 ## The link to industrial-hmi (a protocol, not code)
 
 The two repos are independent. They interoperate through a **serial wire
-protocol** -- `sensorId,value\n` lines at 115200 8N1 -- the same way a browser
+protocol** (`sensorId,value\n` lines at 115200 8N1), the same way a browser
 and a web server interoperate through HTTP. This firmware is the reference
 device; the host's `SerialBackend` is device-agnostic and parses the same
 frames. The canonical protocol is defined in industrial-hmi (ADR-0029).
@@ -114,11 +114,11 @@ not the linker, and not the host tests or CI, because a PC has a working FPU.
 mingw32-make -C tests run
 ```
 
-No board, no test framework, no dependency on the other repo -- it compiles the
+No board, no test framework, no dependency on the other repo. It compiles the
 pure-logic sources with the desktop compiler already on PATH. Two binaries, two
 different questions:
 
-### `contract_frame_test` -- does the wire format still match?
+### `contract_frame_test`: does the wire format still match?
 
 The wire protocol is the one thing two independent repos have to agree on, and
 nothing in a compiler checks it. This closes that gap: the build goes red if
@@ -139,7 +139,7 @@ Covered: the two frames per press and their order, the on/off toggle, the press
 edge (a held button emits nothing), the decimal formatting including negatives,
 and the case where no temperature is available.
 
-### `temperature_test` -- is the number right?
+### `temperature_test`: is the number right?
 
 A separate question, so a separate binary: a red build should say which one
 broke. Covered: both calibration points reproduce exactly, the VDDA correction
@@ -175,7 +175,7 @@ with `plantuml -checkonly`, so the discipline is checked rather than remembered.
 | ADC1 ch17 | internal temperature sensor |
 | ADC1 ch0 | VREFINT, the internal reference used to correct for VDDA |
 
-Clock: the MSI reset clock (4 MHz) -- no PLL setup. USART2 BRR = 35.
+Clock: the MSI reset clock (4 MHz), no PLL setup. USART2 BRR = 35.
 
 ## Build and flash
 

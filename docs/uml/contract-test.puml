@@ -3,7 +3,7 @@
 ' Grounded in tests/contract_frame_test.c, tests/frame_gate.c,
 ' Src/telemetry.c, and SerialFrameParserTest.cpp in industrial-hmi.
 
-title Contract test -- pinning the frames to the host's parser rules
+title Contract test: pinning the frames to the host's parser rules
 
 skinparam shadowing false
 skinparam componentStyle rectangle

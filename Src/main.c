@@ -1,6 +1,6 @@
 /**
  * @file main.c
- * @brief hmi-edge-node -- composition root. Initialises the drivers and runs
+ * @brief hmi-edge-node, the composition root. Initialises the drivers and runs
  *        the poll loop, wiring the HAL (board / uart / adc) to the pure
  *        application logic (telemetry / temperature). No hardware detail
  *        lives here.

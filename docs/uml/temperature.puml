@@ -2,7 +2,7 @@
 ' How raw ADC counts become degrees, and where each guard sits.
 ' Grounded in Src/temperature.c, Inc/temperature.h, Src/adc.c, Src/main.c.
 
-title Counts to degrees -- the conversion and its guards
+title Counts to degrees: the conversion and its guards
 
 skinparam shadowing false
 
