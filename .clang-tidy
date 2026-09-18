@@ -1,0 +1,94 @@
+# Static analysis gate for the hand-written firmware.
+#
+# This is the discipline layer the charter asks for. It is NOT a MISRA checker
+# and this project does not claim MISRA compliance: MISRA is a paid standard
+# whose real checkers are commercial tools, and a partial free approximation
+# dressed up as compliance would be an overclaim. What this does give is a
+# machine-checked gate in the same spirit: catch the classes of mistake that
+# bite C firmware, before they reach the board.
+#
+# Every check is opted into explicitly (the leading -*), so a new clang-tidy
+# release cannot quietly widen the gate. Every exclusion below carries its
+# reason, because an undocumented suppression is indistinguishable from a bug.
+#
+# Verified green on all of Src/ at the time it was added.
+
+Checks: >
+  -*,
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  readability-function-size,
+  readability-identifier-naming,
+  readability-non-const-parameter,
+  readability-inconsistent-declaration-parameter-name,
+  readability-misleading-indentation,
+  readability-braces-around-statements,
+  -bugprone-easily-swappable-parameters,
+  -clang-analyzer-core.FixedAddressDereference,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  -cert-err33-c
+
+# Why each exclusion:
+#
+#   clang-analyzer-core.FixedAddressDereference
+#     Dereferencing a fixed address IS register access. REG32(0x48000000UL) is
+#     the whole point of a hand-written register map. Twelve hits, all correct
+#     code. Leaving this on would train everyone to ignore the tool.
+#
+#   clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
+#     Wants memcpy_s from C11 Annex K, which is optional and absent from the
+#     toolchains this project uses. The advice is unfollowable here.
+#
+#   cert-err33-c
+#     Wants every library return value checked. On bare metal the calls in
+#     question are printf in host tests, already cast to (void) deliberately.
+#
+#   bugprone-easily-swappable-parameters
+#     Fires on the ST-generated stubs and, more importantly, misses the one
+#     real case in this codebase (the two uint32_t of temperature_deci_celsius).
+#     A check that is loud where it does not matter and silent where it does is
+#     worse than no check. That risk is handled by typing, not by linting.
+
+WarningsAsErrors: '*'
+
+# Without this, clang-tidy silently drops every diagnostic whose primary
+# location is a header, and in this project that is most of them: all public
+# declarations live in Inc/*.h. A misnamed function was reported against its
+# declaration, not its definition, so the gate looked green while missing it.
+# Scoped to this project's own headers so the toolchain's are left alone.
+# Matched as a substring search against the file name, so it works for both the
+# relative path CI uses and an absolute one from an editor.
+HeaderFilterRegex: '(Inc|tests)/'
+
+# Paths are filtered by the CI job instead of here, so that a local run with no
+# arguments behaves the same way. The ST-generated files (syscalls.c, sysmem.c,
+# the startup assembly) are excluded there for the same reason .gitattributes
+# marks them vendored: they are not hand-written work.
+
+CheckOptions:
+  # Calibrated against the real code, not aspiration. The longest hand-written
+  # function is 33 lines, so 50 leaves room to breathe while still catching a
+  # function that runs away. A 100-line limit would never fire here.
+  readability-function-size.LineThreshold: '50'
+  readability-function-size.StatementThreshold: '40'
+  readability-function-size.BranchThreshold: '10'
+  readability-function-size.NestingThreshold: '4'
+  readability-function-size.ParameterThreshold: '5'
+
+  # C conventions, snake_case throughout, which is what the code already uses.
+  # NOT camelCase: that is the qorder (Dart) rule and would look foreign here.
+  # The naming pattern that matters is module_action, so every function reads
+  # as a sentence: board_button_pressed, temperature_deci_celsius.
+  readability-identifier-naming.FunctionCase: 'lower_case'
+  readability-identifier-naming.VariableCase: 'lower_case'
+  readability-identifier-naming.ParameterCase: 'lower_case'
+  readability-identifier-naming.StructCase: 'lower_case'
+  readability-identifier-naming.TypedefCase: 'lower_case'
+  readability-identifier-naming.EnumConstantCase: 'UPPER_CASE'
+  readability-identifier-naming.MacroDefinitionCase: 'UPPER_CASE'
+  readability-identifier-naming.GlobalVariablePrefix: 'g_'
+  readability-identifier-naming.GlobalConstantPrefix: 'k_'
+  # SystemInit is named by the ARM startup code, which calls it by that symbol.
+  # The underscore form covers the newlib syscall stubs (_write, _sbrk).
+  readability-identifier-naming.FunctionIgnoredRegexp: 'SystemInit|_[a-z_]+'

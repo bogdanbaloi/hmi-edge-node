@@ -158,12 +158,35 @@ Every push and every pull request runs three jobs, none of which needs a board:
 | --- | --- |
 | Host tests | does the logic still do what it claims |
 | Cross-compile | does it still build **and link** for the real Cortex-M4 |
+| Static analysis | does it still hold the line on naming, size and bug classes |
 | Docs discipline | do the diagrams still validate, does Doxygen still run clean |
 
 The cross-compile uses the same flags as STM32CubeIDE and performs a full link,
 because a missing symbol or an overflowing section only shows up at link time.
 The docs job enforces the rule that every new piece carries a diagram validated
 with `plantuml -checkonly`, so the discipline is checked rather than remembered.
+
+### Static analysis, and what it is not
+
+`clang-tidy` runs with `WarningsAsErrors`, so the first finding turns the build
+red. The config is in `.clang-tidy`, every check opted into explicitly and every
+exclusion carrying its reason. It enforces `snake_case` in the `module_action`
+shape the code already uses, a 50-line ceiling per function (the longest today
+is 33), and the `bugprone` and `clang-analyzer` families.
+
+**This is not a MISRA checker and this project does not claim MISRA
+compliance.** MISRA is a paid standard whose real checkers are commercial tools.
+A partial free approximation presented as compliance would be an overclaim, and
+it would not survive one question at an interview. What this is: a
+machine-checked discipline layer in the same spirit.
+
+Two exclusions are worth knowing about, because both would otherwise look like
+the tool is broken. `FixedAddressDereference` fires on every register access,
+which is exactly what a hand-written register map does. `DeprecatedOrUnsafeBufferHandling`
+asks for C11 Annex K functions that no toolchain here ships.
+
+`docs/uml/quality-gates.puml` lays out all four gates and, more usefully, what
+each one **cannot** catch.
 
 ## Pin map
 
@@ -195,3 +218,4 @@ port as an argument). Press the button and watch the frames stream.
 - Sequence (button press to telemetry frames): `docs/uml/sequence-button.puml`.
 - Contract test (how the frames stay pinned to the host): `docs/uml/contract-test.puml`.
 - Counts to degrees (the conversion and its guards): `docs/uml/temperature.puml`.
+- Quality gates (what each one catches, and what it cannot): `docs/uml/quality-gates.puml`.

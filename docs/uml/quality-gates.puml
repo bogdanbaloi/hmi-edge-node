@@ -1,0 +1,88 @@
+@startuml quality-gates
+' The four gates a change passes, and what each one can and cannot catch.
+' Grounded in .github/workflows/ci.yml, .clang-tidy, tests/, docs/uml/.
+
+title Quality gates: what each one catches, and what it cannot
+
+skinparam shadowing false
+skinparam componentStyle rectangle
+
+rectangle "1. Compiler" as C #ddeeff {
+  card "-Wall -Wextra -Werror\n-pedantic, gcc and clang" as Cc
+}
+
+rectangle "2. Host tests" as T #ddffdd {
+  card "267 checks\ncontract + conversion" as Tt
+}
+
+rectangle "3. Static analysis" as S #ffeedd {
+  card "clang-tidy\nnaming, size, bug classes" as Ss
+}
+
+rectangle "4. Cross-compile" as X #eeddff {
+  card "Cortex-M4\ncompile AND link" as Xx
+}
+
+rectangle "Only the board" as B #ffdddd {
+  card "does the number match\nthe real world" as Bb
+}
+
+Cc --> Tt
+Tt --> Ss
+Ss --> Xx
+Xx --> Bb
+
+note right of Cc
+  Catches: type errors, unused
+  results, implicit conversions.
+  Misses: anything that compiles
+  and is still wrong.
+end note
+
+note right of Tt
+  Catches: wrong behaviour, a broken
+  wire format, arithmetic that drifts.
+  Proven by mutation testing.
+  Misses: anything main.c wires up
+  wrongly, since main.c is not tested.
+end note
+
+note right of Ss
+  Catches: a name that stops telling
+  a story, a function that runs away,
+  a pointer that should be const.
+  Misses: the two adjacent uint32_t
+  of temperature_deci_celsius. That
+  risk is handled by typing, not
+  by linting.
+end note
+
+note right of Xx
+  Catches: a missing symbol, an
+  overflowing section. These appear
+  at LINK time, never before.
+  Misses: everything about runtime.
+end note
+
+note right of Bb
+  The FPU trap passed all four gates:
+  the compiler was told an FPU exists,
+  the linker saw nothing wrong, and
+  host tests pass because a PC has a
+  working FPU. Only the board fails,
+  and it fails by going quiet.
+end note
+
+note as Honest
+  **What this is NOT**
+  Not a MISRA checker, and the project
+  does not claim MISRA compliance.
+  MISRA is a paid standard whose real
+  checkers are commercial. A partial
+  free approximation presented as
+  compliance would be an overclaim.
+  This is discipline in the same
+  spirit, machine-checked.
+end note
+
+@enduml

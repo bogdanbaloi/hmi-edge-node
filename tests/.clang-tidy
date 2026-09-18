@@ -1,0 +1,23 @@
+# Test code has a different shape than production code, and pretending
+# otherwise leads to worse tests.
+#
+# This inherits everything from the root .clang-tidy and relaxes only the size
+# thresholds. Two reasons, both specific:
+#
+#   frame_gate_selfcheck is 82 lines because it enumerates the canonical
+#   samples copied from the host's SerialFrameParserTest. A table of cases is
+#   supposed to be long and flat. Splitting it into helpers would hide the one
+#   thing a reader needs to see: the samples themselves, in a row.
+#
+#   whole_input_domain_is_monotonic nests two loops to sweep a 2D input space.
+#   Depth 5 is what a property test over two variables looks like.
+#
+# Nothing else is relaxed. A test that dereferences a null pointer or shadows a
+# variable is still a bug, and the gate still says so.
+
+InheritParentConfig: true
+
+CheckOptions:
+  readability-function-size.LineThreshold: '120'
+  readability-function-size.StatementThreshold: '90'
+  readability-function-size.NestingThreshold: '6'

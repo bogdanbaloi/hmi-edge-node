@@ -6,6 +6,7 @@
 #
 #   tests     does the logic still do what it claims, on a host, in seconds
 #   firmware  does it still build and LINK for the real Cortex-M4
+#   lint      does it still hold the line on naming, size and the bug classes
 #   docs      is the documentation discipline actually being followed
 #
 # None of it needs a board: telemetry and temperature are pure logic on
@@ -68,6 +69,49 @@ jobs:
 
       - name: Size
         run: arm-none-eabi-size firmware.elf
+
+  lint:
+    name: Static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-tidy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-tidy
+
+      - name: Version
+        run: clang-tidy --version
+
+      # The config lives in .clang-tidy (and tests/.clang-tidy), so a local run
+      # behaves exactly like this one. WarningsAsErrors is set there, which is
+      # what turns a finding into a red build.
+      #
+      # syscalls.c and sysmem.c are skipped: they are ST-generated newlib stubs,
+      # not hand-written work, the same reason .gitattributes marks the startup
+      # assembly and the linker scripts as vendored. They accounted for every
+      # finding when the gate was first run.
+      - name: Lint the firmware
+        run: |
+          status=0
+          for f in Src/*.c; do
+            case "$(basename "$f")" in syscalls.c|sysmem.c) continue;; esac
+            echo "::group::$f"
+            clang-tidy "$f" --quiet -- -std=c11 -IInc || status=1
+            echo "::endgroup::"
+          done
+          exit $status
+
+      - name: Lint the tests
+        run: |
+          status=0
+          for f in tests/*.c; do
+            echo "::group::$f"
+            clang-tidy "$f" --quiet -- -std=c11 -IInc -Itests || status=1
+            echo "::endgroup::"
+          done
+          exit $status
 
   docs:
     name: Docs discipline
