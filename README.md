@@ -65,7 +65,7 @@ on a host PC:
 
 | Layer | Files | Job |
 | --- | --- | --- |
-| HAL / BSP | `board`, `uart`, `adc`, `registers.h` | the only code that touches registers |
+| HAL / BSP | `core`, `board`, `uart`, `adc`, `registers.h` | the only code that touches registers |
 | App | `telemetry`, `temperature` | pure logic: a button edge -> the frames, and counts -> degrees |
 | Composition | `main.c` | wires the HAL to the app and runs the loop |
 
@@ -77,6 +77,32 @@ no board needed to test the frame logic.
 convert to degrees: that is arithmetic, and it lives in `temperature` where a
 host test can reach it. The adapter that joins the two sits in `main.c`, the
 only place a driver and pure logic are supposed to meet.
+
+`core` is separate from `board` on purpose. `board` owns what changes when you
+swap the board; `core` owns the CPU itself, which is the same on every
+Cortex-M4 and is described by the ARM architecture manual rather than by
+RM0351.
+
+### The FPU has two switches
+
+Worth spelling out, because it is a trap that nothing catches for you.
+
+| Switch | Where | What it does |
+| --- | --- | --- |
+| Build time | `-mfloat-abi=hard -mfpu=fpv4-sp-d16` | tells the **compiler** an FPU exists, so float code becomes VFP instructions |
+| Run time | `CPACR` at `0xE000ED88` | grants the **core** access to it. Resets to denied, so the FPU is off after every reset |
+
+This project had the first and not the second. Nothing complained, because
+nothing used a float. But any float added later would have compiled silently
+into a VFP instruction, hit a disabled unit, raised a UsageFault with the NOCP
+bit, escalated to HardFault, and landed in the startup file's default handler,
+which is an infinite loop. The board would just freeze, with nothing on the
+serial line to explain it.
+
+Nothing catches that mismatch: not the compiler (it was told an FPU exists),
+not the linker, and not the host tests or CI, because a PC has a working FPU.
+`core_enable_fpu()` runs from `SystemInit`, before `.data` is copied and before
+`main`, which is the earliest point any C code could execute a float.
 
 ## Tests
 

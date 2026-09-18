@@ -1,0 +1,71 @@
+@startuml fpu-enable
+' The two switches of an FPU, and what happens when only one is on.
+' Grounded in Src/core.c, Inc/core.h, Inc/registers.h (SCB_CPACR),
+' Src/main.c (SystemInit) and Startup/startup_stm32l476rgtx.s.
+
+title FPU: two switches, only one of them is a compiler flag
+
+skinparam shadowing false
+
+rectangle "Switch 1: BUILD TIME" as Build #ddeeff {
+  card "-mfloat-abi=hard\n-mfpu=fpv4-sp-d16" as Flags
+  note bottom of Flags
+    Tells the COMPILER an FPU exists.
+    Float code becomes VFP instructions
+    (vmul.f32, vadd.f32, ...).
+    Was already on in this project.
+  end note
+}
+
+rectangle "Switch 2: RUN TIME" as Run #ddffdd {
+  card "CPACR at 0xE000ED88\nCP10 + CP11 full access" as Cpacr
+  note bottom of Cpacr
+    Grants the CORE access to the FPU.
+    Resets to "denied", so the FPU is
+    OFF after every reset.
+    This is what was missing.
+  end note
+}
+
+rectangle "What used to happen" as Bad #ffdddd {
+  card "float x = a * b;" as Float
+  card "vmul.f32 hits a disabled unit" as Vmul
+  card "UsageFault, NOCP bit" as Fault
+  card "escalates to HardFault" as Hard
+  card "Default_Handler:\n  b Infinite_Loop" as Loop
+  card "the board freezes,\nnothing on the serial line" as Dead
+
+  Float --> Vmul
+  Vmul  --> Fault
+  Fault --> Hard
+  Hard  --> Loop
+  Loop  --> Dead
+}
+
+Flags --> Float : compiles silently
+Cpacr -[#green,bold]-> Vmul : with switch 2 on,\nthis path never starts
+
+note as Order
+  **Order of bring-up**
+  startup .s sets the stack pointer
+  -> bl SystemInit
+       -> core_enable_fpu()
+            write CPACR, then DSB, then ISB
+  -> copy .data, zero .bss
+  -> main()
+
+  Earliest possible point, before any C
+  code could execute a float.
+end note
+
+note as Silent
+  **Why nothing caught it**
+  The compiler cannot warn: it was told
+  an FPU exists. The linker cannot see it.
+  Host tests pass, because a PC has a
+  working FPU. CI passes for the same
+  reason. Only the board fails, and it
+  fails by going quiet.
+end note
+
+@enduml
