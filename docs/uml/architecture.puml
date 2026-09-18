@@ -5,7 +5,7 @@
 ' Grounded in the real source: Src/main.c, Src/telemetry.c, Src/board.c,
 ' Src/uart.c, Src/adc.c, Inc/registers.h.
 
-title hmi-edge-node -- HAL / app layering
+title hmi-edge-node: HAL / app layering
 
 skinparam shadowing false
 skinparam componentStyle rectangle

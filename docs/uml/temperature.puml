@@ -2,7 +2,7 @@
 ' How raw ADC counts become degrees, and where each guard sits.
 ' Grounded in Src/temperature.c, Inc/temperature.h, Src/adc.c, Src/main.c.
 
-title Counts to degrees -- the conversion and its guards
+title Counts to degrees: the conversion and its guards
 
 skinparam shadowing false
 
@@ -45,11 +45,12 @@ endif
 :deci = 300 + 1000 * (ts_corrected - TS_CAL1)
              / (TS_CAL2 - TS_CAL1);
 note right
-  Integer arithmetic only. The FPU
-  is not enabled on this build, so
-  a float here would fault. Tenths
-  of a degree is also exactly what
-  the wire format wants.
+  Integer arithmetic only, by choice.
+  A tenth of a degree is finer than
+  the sensor's accuracy, so a float
+  would buy precision the hardware
+  does not have. Tenths is also
+  exactly what the wire format wants.
 end note
 
 if (deci within -50 C .. 150 C?) then (no)

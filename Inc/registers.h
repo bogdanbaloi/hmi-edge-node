@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 /*
- * Minimal STM32L476RG register map -- ONLY the registers this firmware
+ * Minimal STM32L476RG register map, ONLY the registers this firmware
  * touches. Addresses and bit positions taken from the STM32L4 reference
  * manual (RM0351) and the datasheet memory map.
  *

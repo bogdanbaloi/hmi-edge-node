@@ -7,7 +7,7 @@
  * @file telemetry.h
  * @brief Application logic: turn a button press into telemetry frames.
  *
- * Pure logic -- no registers, no hardware. It depends only on injected
+ * Pure logic, no registers, no hardware. It depends only on injected
  * function pointers (a temperature reader and a line sink), so it is
  * unit-testable on a host PC with a fake reader and a capturing sink.
  * That is the whole point of splitting it from the HAL.

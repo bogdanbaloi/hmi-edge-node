@@ -7,7 +7,7 @@
  * @file temperature.h
  * @brief Turn raw ADC counts into tenths of a degree Celsius.
  *
- * Pure arithmetic -- no registers, so it runs in a host test. The driver
+ * Pure arithmetic, no registers, so it runs in a host test. The driver
  * reads the numbers, this decides what they mean, and `main.c` wires the two
  * together. Keeping the maths here is what makes it checkable without a board.
  *
@@ -16,7 +16,7 @@
  * ST measured all three calibration points at VDDA = 3.0 V. A Nucleo-L476RG
  * runs VDDA at 3.3 V, so the same die temperature produces a ~10% smaller
  * count than the calibration line expects. Applying the line directly would
- * be wrong by tens of degrees -- a plausible-looking number that is simply
+ * be wrong by tens of degrees, a plausible-looking number that is simply
  * false. Reading VREFINT (a bandgap reference, constant against VDDA) gives
  * the scale factor back:
  *
@@ -26,9 +26,11 @@
  *
  * ## The maths, in integers
  *
- * No floating point: the FPU is not enabled on this bare-metal build, so a
- * float operation would fault. Everything is `int32_t`, and the result is in
- * TENTHS of a degree, which is what the wire format wants (`temp,23.5`).
+ * No floating point, by choice rather than by necessity. The FPU is enabled at
+ * startup (see core_enable_fpu), so a float would work, but a tenth of a
+ * degree is already finer than the sensor's accuracy. Everything is `int32_t`,
+ * and the result is in TENTHS of a degree, which is what the wire format wants
+ * (`temp,23.5`).
  *
  *     deci = 300 + (1000 * (ts_corrected - TS_CAL1)) / (TS_CAL2 - TS_CAL1)
  *

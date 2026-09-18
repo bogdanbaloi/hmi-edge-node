@@ -16,7 +16,7 @@
  * The rules, each pinned by a sample copied from the host's
  * SerialFrameParserTest (see frame_gate_selfcheck in the test):
  *   - a reading is one line terminated by `\n`; a trailing `\r` is tolerated
- *   - the line holds exactly ONE ',' -- zero or two or more is rejected
+ *   - the line holds exactly ONE ',', so zero or two or more is rejected
  *   - neither the sensor id nor the value may be empty
  *   - empty lines are skipped, and a malformed line never drops a valid one
  *   - the value stays TEXT; the host does not parse it as a number

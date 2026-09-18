@@ -181,7 +181,7 @@ static void frame_gate_selfcheck(void) {
     CHECK_STR(r.items[0].value, "23");
     CHECK(r.rejected == 1U);
 
-    /* PartialAfterCompleteFrameIsHeld -- the complete frame is emitted, the
+    /* PartialAfterCompleteFrameIsHeld: the complete frame is emitted, the
        fragment is not. The host buffers it; the gate only flags it. */
     frame_gate_consume("temp,23.5\nhum", &r);
     CHECK(r.count == 1U);
@@ -193,14 +193,14 @@ static void frame_gate_selfcheck(void) {
        They are copied here for the same reason as the rest: the gate has to
        track the host's test, not the other way round. */
 
-    /* NegativeTemperatureValueParses -- a sub-zero reading carries a leading
+    /* NegativeTemperatureValueParses: a sub-zero reading carries a leading
        minus, and the host keeps the value as opaque text. */
     frame_gate_consume("temp,-3.5\n", &r);
     CHECK(r.count == 1U);
     CHECK_STR(r.items[0].sensor_id, "temp");
     CHECK_STR(r.items[0].value, "-3.5");
 
-    /* PressWithoutTemperatureYieldsOnlyTheStateFrame -- the device drops the
+    /* PressWithoutTemperatureYieldsOnlyTheStateFrame: the device drops the
        temperature frame when it has no valid reading, so one press can arrive
        as a single frame. Nothing pairs the two. */
     frame_gate_consume("equipment/3/state,on\n", &r);
