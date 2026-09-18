@@ -3,7 +3,7 @@
 Bare-metal STM32 firmware for a **Nucleo-L476RG** (ARM Cortex-M4). It is the
 device side of a hardware/software integration demo: it reads the physical
 world (a button, the MCU's internal temperature sensor) and streams telemetry
-over a serial link to the [industrial-hmi](../industrial-hmi) host, which
+over a serial link to the [industrial-hmi](https://github.com/bogdanbaloi/industrial-hmi) host, which
 toggles a production line in its dashboard.
 
 Written **register-level, no HAL and no CMSIS** -- every peripheral is brought
