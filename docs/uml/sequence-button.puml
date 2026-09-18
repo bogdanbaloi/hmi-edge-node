@@ -1,0 +1,36 @@
+@startuml sequence-button
+' One button press: how it becomes two telemetry frames on the wire.
+' Grounded in Src/main.c (loop), Src/telemetry.c (telemetry_update),
+' Src/board.c, Src/adc.c, Src/uart.c.
+
+title Button press -> telemetry frames -> host
+
+skinparam shadowing false
+
+actor Operator
+participant "main loop" as Main
+participant "board"      as Board
+participant "telemetry"  as Tel
+participant "adc"        as Adc
+participant "uart"       as Uart
+participant "industrial-hmi\nSerialBackend" as Host
+
+Operator -> Board : press B1
+Main -> Board : board_button_pressed()
+Board --> Main : pressed = 1
+Main -> Tel : telemetry_update(pressed,\nadc_temp_read, uart_send_string)
+Tel -> Tel : press edge? toggle equipment_on
+Tel -> Uart : sink("equipment/0/state,on\\n")
+Tel -> Adc  : read_temp()
+Adc --> Tel : raw ADC counts
+Tel -> Uart : sink("temp,<raw>\\n")
+Uart -> Host : bytes over USART2 -> COMx
+Tel --> Main : acted = 1
+Main -> Board : board_led_set(equipment_on)
+
+note across
+  telemetry never touches hardware: it calls the injected
+  read_temp() and sink(), so the same code runs in a host test.
+end note
+
+@enduml

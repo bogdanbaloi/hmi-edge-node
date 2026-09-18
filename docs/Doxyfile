@@ -1,0 +1,40 @@
+# Doxygen configuration for hmi-edge-node.
+# Generates a browsable HTML API reference from the /// and /** */ comments.
+# Run from the repo root:  doxygen docs/Doxyfile
+# Output goes to build/doxygen/html (gitignored).
+
+#---- Project identity ---------------------------------------------------------
+PROJECT_NAME           = "hmi-edge-node"
+PROJECT_BRIEF          = "Bare-metal STM32 telemetry firmware (register-level, HAL/app layered)"
+OUTPUT_DIRECTORY       = build/doxygen
+
+#---- What to read -------------------------------------------------------------
+INPUT                  = Src Inc README.md
+FILE_PATTERNS          = *.c *.h *.md
+RECURSIVE              = YES
+# The register map is a flat address list, not an API surface.
+EXCLUDE                = Startup
+
+#---- What to extract ----------------------------------------------------------
+# Show the whole surface even where a comment is missing, so the reference is
+# complete. This is C, so optimise the output for it.
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = YES
+OPTIMIZE_OUTPUT_FOR_C  = YES
+# Treat the first sentence of a comment block as the brief (matches our style).
+JAVADOC_AUTOBRIEF      = YES
+
+#---- Output -------------------------------------------------------------------
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+# README.md becomes the landing page of the generated site.
+USE_MDFILE_AS_MAINPAGE = README.md
+
+#---- Diagrams -----------------------------------------------------------------
+# Off by default so the docs build anywhere without Graphviz.
+HAVE_DOT               = NO
+
+#---- Warnings (documentation hygiene) -----------------------------------------
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES
+QUIET                  = YES

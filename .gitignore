@@ -14,3 +14,6 @@
 
 # CubeIDE launch configs (user-local, regenerated)
 *.launch
+
+# Generated docs
+/build/

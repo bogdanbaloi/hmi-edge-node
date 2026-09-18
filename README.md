@@ -70,3 +70,9 @@ mounts as a mass-storage drive, so a `.bin` can be flashed by drag-and-drop.
 
 `serial-monitor.bat` opens a live serial monitor on COM3 @ 115200 (pass another
 port as an argument). Press the button and watch the frames stream.
+
+## Docs
+
+- API reference: `doxygen docs/Doxyfile` (output in `build/doxygen/html`).
+- Architecture diagram (HAL / app layering): `docs/uml/architecture.puml`.
+- Sequence (button press to telemetry frames): `docs/uml/sequence-button.puml`.

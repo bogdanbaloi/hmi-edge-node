@@ -1,0 +1,56 @@
+@startuml architecture
+' Component view: the HAL / app layering. The application logic never touches
+' a register, so it is portable and host-testable; only the HAL does I/O.
+'
+' Grounded in the real source: Src/main.c, Src/telemetry.c, Src/board.c,
+' Src/uart.c, Src/adc.c, Inc/registers.h.
+
+title hmi-edge-node -- HAL / app layering
+
+skinparam shadowing false
+skinparam componentStyle rectangle
+
+package "Composition" {
+  [main.c] as Main
+}
+
+package "Application (pure logic, host-testable)" {
+  [telemetry] as Tel
+}
+
+package "HAL / BSP (the only code that touches registers)" {
+  [board] as Board
+  [uart]  as Uart
+  [adc]   as Adc
+  [registers.h] as Regs
+}
+
+package "Hardware (STM32L476)" {
+  [GPIO: button B1 / LED LD2] as Gpio
+  [USART2 -> ST-Link VCP]     as Usart
+  [ADC1: internal temp sensor] as AdcHw
+}
+
+Main --> Board : init / button / led
+Main --> Uart  : init / send
+Main --> Adc   : init / read
+Main --> Tel   : telemetry_update(button,\nread_temp, sink)
+
+Tel ..> Adc  : read_temp() injected
+Tel ..> Uart : sink() injected
+
+Board --> Regs
+Uart  --> Regs
+Adc   --> Regs
+
+Board --> Gpio
+Uart  --> Usart
+Adc   --> AdcHw
+
+note bottom of Tel
+  Depends only on injected function
+  pointers, never on registers.
+  Unit-testable on a host PC.
+end note
+
+@enduml
