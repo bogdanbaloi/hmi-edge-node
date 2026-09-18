@@ -1,0 +1,83 @@
+@startuml debounce
+' Why a button needs debouncing, and why the fix is a decision rather than a
+' delay. Grounded in Src/telemetry.c (press_is_settled), Src/core.c
+' (core_millis), Inc/telemetry.h (TELEMETRY_DEBOUNCE_MS).
+
+title Debounce: a decision about time, not a pause
+
+skinparam shadowing false
+
+rectangle "The physical problem" as P #ffdddd {
+  card "A button is two pieces of metal meeting.\nThey bounce apart several times over\nthe first few milliseconds.\n\n1 __|‾|_|‾‾|___|‾‾‾‾‾‾‾‾\n0 __| |_|  |___|\n   <--- 1 to 20 ms --->\n\nThe pin shows a BURST of edges.\nA processor polling at megahertz\nsees every single one." as Pp
+}
+
+rectangle "What it used to be" as O #ffeedd {
+  card "busy_wait(120000) in main.c" as Oo
+}
+
+rectangle "What it is now" as N #ddffdd {
+  card "press_is_settled(state, now_ms)\nin telemetry, pure logic" as Nn
+}
+
+P --> O
+O --> N : moved
+
+note bottom of Oo
+  Counts NOP instructions, not time.
+  Three costs:
+  1. Blocks everything for 30 ms.
+  2. 120000 means 30 ms only at 4 MHz.
+     Raise the clock and it silently
+     becomes too short to cover bounce.
+  3. Lives in main.c, which no host
+     test can reach.
+end note
+
+note bottom of Nn
+  Asks one question: has it been at least
+  TELEMETRY_DEBOUNCE_MS since the last
+  accepted edge?
+
+  1. Nothing stalls. The loop stays free.
+  2. Real milliseconds from SysTick, so a
+     clock change cannot break it quietly.
+  3. Pure logic, so a test drives it with
+     any clock it likes.
+end note
+
+note as Sub
+  **The comparison is a SUBTRACTION, deliberately**
+
+  now_ms - last_edge_ms >= DEBOUNCE     correct
+  now_ms >= last_edge_ms + DEBOUNCE     broken
+
+  The clock wraps every 49 days. The second
+  form overflows near the top, the condition
+  goes false, and the button stops responding
+  until the counter comes round again.
+  Unsigned subtraction has no such hole.
+
+  A delay loop could never be asked about this.
+  The test drives the clock to UINT32_MAX - 10
+  and walks it through the wrap.
+end note
+
+note as Clock
+  **Why SysTick runs free instead of reloading every 1 ms**
+
+  The obvious design reloads every millisecond
+  and reads COUNTFLAG. But that bit only says
+  "reached zero at least once since you last
+  read it", never how many times.
+
+  uart_send_string blocks about 2.7 ms per press
+  at 115200. During that nobody reads the flag,
+  so the clock would lose those milliseconds
+  silently and run slow.
+
+  Counting ticks from the free-running counter
+  makes a long gap add the right number of
+  milliseconds back.
+end note
+
+@enduml

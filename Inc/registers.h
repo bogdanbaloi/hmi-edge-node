@@ -76,6 +76,27 @@
 #define VREFINT_CAL_ADDR       REG16(0x1FFF75AAUL) /* VREFINT raw @ 30 C      */
 #define TS_CAL2_ADDR           REG16(0x1FFF75CAUL) /* temp raw @ 130 C        */
 
+/* ---- SysTick: the core's 24-bit down counter (Cortex-M, not STM32) -------
+ * Counts down from RELOAD to zero at the core clock, then reloads and sets
+ * COUNTFLAG. Polled here rather than using its interrupt: this firmware has no
+ * interrupts enabled at all, and a millisecond tick read from the main loop is
+ * enough. Addresses from the ARMv7-M Architecture Reference Manual. */
+#define SYST_CSR               REG32(0xE000E010UL) /* control and status      */
+#define SYST_RVR               REG32(0xE000E014UL) /* reload value            */
+#define SYST_CVR               REG32(0xE000E018UL) /* current value           */
+#define SYST_CSR_ENABLE        (1UL << 0)          /* start counting          */
+#define SYST_CSR_CLKSOURCE     (1UL << 2)          /* 1 = core clock          */
+#define SYST_CSR_COUNTFLAG     (1UL << 16)         /* set when it hit zero    */
+/* The counter is 24 bits, so it spans 16777215 ticks. Left free running at
+ * that full range, which at the 4 MHz MSI reset clock is about 4.19 seconds
+ * between wraps. Elapsed time is derived from the difference between two
+ * readings, so any gap shorter than one wrap is counted exactly. */
+#define SYST_COUNTER_MAX       0x00FFFFFFUL
+/* Core clock is the 4 MHz MSI reset clock, so a millisecond is 4000 ticks.
+ * Change the clock and this must follow, which is why it is written as the
+ * arithmetic rather than as a bare number. */
+#define SYST_TICKS_PER_MS      (4000000UL / 1000UL)
+
 /* ---- SCB: System Control Block (Cortex-M4 core, not STM32 peripheral) ----
  * CPACR controls access to the coprocessors, and the FPU is coprocessors 10
  * and 11. It resets to "access denied", so the FPU is OFF after every reset

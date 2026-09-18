@@ -74,8 +74,8 @@ on a host PC:
 | Composition | `main.c` | wires the HAL to the app and runs the loop |
 
 `telemetry` depends on injected function pointers (a temperature reader and a
-line sink), so a host test drives it with a fake reader and a capturing sink --
-no board needed to test the frame logic.
+line sink), so a host test drives it with a fake reader and a capturing sink.
+No board needed to test the frame logic.
 
 `adc` reports counts and the factory constants but deliberately does **not**
 convert to degrees: that is arithmetic, and it lives in `temperature` where a
@@ -100,7 +100,33 @@ single-field structs compile away entirely.
 `core` is separate from `board` on purpose. `board` owns what changes when you
 swap the board; `core` owns the CPU itself, which is the same on every
 Cortex-M4 and is described by the ARM architecture manual rather than by
-RM0351.
+RM0351. It brings up the FPU and the millisecond clock.
+
+### Debouncing is a decision, not a pause
+
+A button is two pieces of metal meeting, and they bounce apart several times
+over the first few milliseconds. The pin shows that as a burst of edges, and a
+processor polling at megahertz sees every one of them.
+
+This used to be `busy_wait(120000)` in the main loop: count NOP instructions
+until roughly 30 ms had passed. It worked, and it had three problems. It froze
+the processor for 30 ms. The constant meant 30 ms **only at 4 MHz**, so raising
+the clock would have quietly shortened it below the bounce. And it lived in
+`main.c`, which no host test can reach.
+
+Now `telemetry` asks a question instead: has it been at least
+`TELEMETRY_DEBOUNCE_MS` since the last accepted edge? Nothing stalls, the time
+is real milliseconds from SysTick, and because it is pure logic a test can
+drive it with any clock, including one about to wrap.
+
+That last case matters. The comparison is written as a **subtraction**,
+`now - last >= DEBOUNCE`, not as `now >= last + DEBOUNCE`. The clock wraps every
+49 days, and the second form overflows near the top, so the button would stop
+responding until the counter came round. There is a test that walks the clock
+through `UINT32_MAX` to prove it does not.
+
+`docs/uml/debounce.puml` has the whole picture, including why SysTick runs free
+rather than reloading every millisecond.
 
 ### The FPU has two switches
 
@@ -234,3 +260,4 @@ port as an argument). Press the button and watch the frames stream.
 - Contract test (how the frames stay pinned to the host): `docs/uml/contract-test.puml`.
 - Counts to degrees (the conversion and its guards): `docs/uml/temperature.puml`.
 - Quality gates (what each one catches, and what it cannot): `docs/uml/quality-gates.puml`.
+- Debounce (a decision about time, not a pause): `docs/uml/debounce.puml`.
