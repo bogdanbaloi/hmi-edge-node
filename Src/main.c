@@ -13,6 +13,7 @@
 
 #include "adc.h"
 #include "board.h"
+#include "core.h"
 #include "telemetry.h"
 #include "temperature.h"
 #include "uart.h"
@@ -22,8 +23,15 @@
 /// Crude debounce after a press, at the 4 MHz reset clock.
 #define BUTTON_DEBOUNCE_LOOPS 120000UL
 
-/// Startup calls SystemInit before main; we keep the reset clock, so no-op.
+/**
+ * @brief Called by the startup code before `.data` is copied and before main.
+ *
+ * Runs earlier than everything else, so it must not touch initialised globals.
+ * It only delegates to the core HAL. The clock is left alone on purpose: this
+ * firmware runs on the MSI reset clock.
+ */
 void SystemInit(void) {
+    core_enable_fpu();
 }
 
 static void busy_wait(volatile uint32_t loops) {

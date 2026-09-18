@@ -76,6 +76,18 @@
 #define VREFINT_CAL_ADDR       REG16(0x1FFF75AAUL) /* VREFINT raw @ 30 C      */
 #define TS_CAL2_ADDR           REG16(0x1FFF75CAUL) /* temp raw @ 130 C        */
 
+/* ---- SCB: System Control Block (Cortex-M4 core, not STM32 peripheral) ----
+ * CPACR controls access to the coprocessors, and the FPU is coprocessors 10
+ * and 11. It resets to "access denied", so the FPU is OFF after every reset
+ * no matter what the compiler flags say. Enabling it is a RUNTIME step that
+ * the build flags cannot do for you (see SystemInit in main.c).
+ *
+ * Addresses from the ARMv7-M Architecture Reference Manual, not RM0351: this
+ * is core, and it is identical on every Cortex-M4. */
+#define SCB_CPACR              REG32(0xE000ED88UL) /* coprocessor access      */
+/* CP10 and CP11, full access, 0b11 each at bits [21:20] and [23:22]. */
+#define SCB_CPACR_FPU_FULL     (0xFUL << 20)
+
 /* Pin numbers within their ports. */
 #define PIN_USART2_TX  2U   /* PA2  */
 #define PIN_LED        5U   /* PA5  */
