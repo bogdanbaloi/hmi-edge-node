@@ -49,6 +49,34 @@ on a host PC:
 line sink), so a host test drives it with a fake reader and a capturing sink --
 no board needed to test the frame logic.
 
+## Contract test
+
+The wire protocol is the one thing two independent repos have to agree on, and
+nothing in a compiler checks it. `tests/` closes that gap: a host-compiled test
+that fails the build if this firmware stops emitting what the host can parse.
+
+```
+mingw32-make -C tests run
+```
+
+No board, no test framework, no dependency on the other repo -- it compiles the
+pure-logic `Src/telemetry.c` with the desktop compiler already on PATH.
+
+It is built in two layers, and that shape is the point:
+
+| Layer | What it pins | Fails when |
+| --- | --- | --- |
+| `frame_gate` | the host parser's acceptance rules, driven by samples copied verbatim from its `SerialFrameParserTest` | the transcribed rules drift from the host's |
+| `contract_frame_test` | telemetry's real output, pushed through that gate and asserted byte for byte | this firmware changes the frame format |
+
+With literal assertions alone, a format change could be "fixed" on both sides at
+once and the contract would break in silence. The gate is anchored to the host's
+own samples, so it cannot be edited into agreement.
+
+Covered: the two frames per press and their order, the on/off toggle, the press
+edge (a held button emits nothing), and the hand-rolled decimal formatting
+across the range of `uint32_t`.
+
 ## Pin map
 
 | Pin | Role |
@@ -76,3 +104,4 @@ port as an argument). Press the button and watch the frames stream.
 - API reference: `doxygen docs/Doxyfile` (output in `build/doxygen/html`).
 - Architecture diagram (HAL / app layering): `docs/uml/architecture.puml`.
 - Sequence (button press to telemetry frames): `docs/uml/sequence-button.puml`.
+- Contract test (how the frames stay pinned to the host): `docs/uml/contract-test.puml`.

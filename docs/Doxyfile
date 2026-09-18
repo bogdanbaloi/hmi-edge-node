@@ -9,7 +9,7 @@ PROJECT_BRIEF          = "Bare-metal STM32 telemetry firmware (register-level, H
 OUTPUT_DIRECTORY       = build/doxygen
 
 #---- What to read -------------------------------------------------------------
-INPUT                  = Src Inc README.md
+INPUT                  = Src Inc tests README.md
 FILE_PATTERNS          = *.c *.h *.md
 RECURSIVE              = YES
 # The register map is a flat address list, not an API surface.

@@ -17,3 +17,7 @@
 
 # Generated docs
 /build/
+
+# Host test binary
+/tests/contract_frame_test
+/tests/contract_frame_test.exe

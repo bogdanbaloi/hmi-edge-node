@@ -1,0 +1,53 @@
+@startuml contract-test
+' Why the contract test has two layers, and what each one pins to what.
+' Grounded in tests/contract_frame_test.c, tests/frame_gate.c,
+' Src/telemetry.c, and SerialFrameParserTest.cpp in industrial-hmi.
+
+title Contract test -- pinning the frames to the host's parser rules
+
+skinparam shadowing false
+skinparam componentStyle rectangle
+
+package "hmi-edge-node (this repo)" {
+  [telemetry\n(pure logic)]        as Tel
+  [fake reader +\ncapturing sink]  as Doubles
+  [frame_gate\n(the host's rules,\ntranscribed)] as Gate
+  [contract_frame_test]            as Test
+}
+
+package "industrial-hmi (separate repo, no code shared)" {
+  [SerialFrameParserTest.cpp] as HostTest
+  [SerialFrameParser]         as HostParser
+}
+
+Test --> Doubles  : injects
+Doubles --> Tel   : drives telemetry_update()
+Tel --> Test      : the exact bytes\n("equipment/0/state,on\\n"\n "temp,<raw>\\n")
+
+Test --> Gate     : layer 2\nfeed the firmware's bytes
+HostTest ..> Gate : layer 1\nsamples copied verbatim\n("temp,23.5", "a,b,c", ",23", ...)
+
+HostTest --> HostParser : tests
+HostParser ..> Tel      : reads on the wire\n(115200 8N1, ADR-0029)
+
+note bottom of Gate
+  Layer 1 fails FIRST if the transcribed
+  rules drift from the host's. Only then
+  does layer 2 say anything about firmware.
+end note
+
+note right of Test
+  Two layers on purpose. With literal
+  assertions alone, a format change could
+  be "fixed" on both sides at once and the
+  contract would break in silence. The gate
+  is anchored to the host's own samples, so
+  it cannot be edited into agreement.
+end note
+
+note bottom of HostParser
+  No build dependency between the repos.
+  They share a wire protocol, not code.
+end note
+
+@enduml
