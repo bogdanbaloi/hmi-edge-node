@@ -5,8 +5,8 @@
  *        application logic (telemetry). No hardware detail lives here.
  *
  * Each button press emits, over USART2 (the ST-Link virtual COM port):
- *     equipment/0/state,on|off\n
- *     temp,<raw>\n
+ *     `equipment/0/state,on|off\n`
+ *     `temp,<raw>\n`
  * which the industrial-hmi SerialBackend parses. See README.md.
  */
 

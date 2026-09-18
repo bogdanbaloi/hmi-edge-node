@@ -30,8 +30,8 @@ void telemetry_init(telemetry_state_t *state);
 
 /// Call every loop with the current button state. On the press EDGE (was up,
 /// now down) it toggles the equipment state and emits, through `sink`:
-///     equipment/0/state,on|off\n
-///     temp,<raw>\n            (raw = read_temp())
+///     `equipment/0/state,on|off\n`
+///     `temp,<raw>\n`          (raw = read_temp())
 /// Returns 1 when it acted on an edge (so the caller can update the LED and
 /// debounce), 0 otherwise. Never touches hardware directly.
 uint32_t telemetry_update(telemetry_state_t *state, uint32_t button_down,
