@@ -60,7 +60,7 @@ if (deci within -50 C .. 150 C?) then (no)
 endif
 
 #ddffdd:return deci;
-:telemetry formats "temp,23.5\n";
+:telemetry formats "temp,23.5\\n";
 note right
   Every red path ends in the sentinel,
   and telemetry then omits the temperature
