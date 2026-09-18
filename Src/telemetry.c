@@ -16,6 +16,8 @@
 void telemetry_init(telemetry_state_t *state) {
     state->equipment_on    = 0U;
     state->button_was_down = 0U;
+    state->last_edge_ms    = 0U;
+    state->have_edge       = 0U;
 }
 
 /// Format an unsigned value as decimal into `out` (>= 11 chars), returning a
@@ -66,12 +68,31 @@ static void build_temp_line(int32_t deci, char *line) {
     line[p]   = '\0';
 }
 
+/**
+ * Is this edge a real press, or the contacts still bouncing?
+ *
+ * The comparison is a SUBTRACTION, deliberately. Written as
+ * `now_ms >= state->last_edge_ms + TELEMETRY_DEBOUNCE_MS` it would break when
+ * the clock wraps: the sum overflows, the condition goes false, and the button
+ * stops responding until the counter comes round again. Unsigned subtraction
+ * has no such hole, because the wrap cancels out.
+ */
+static uint32_t press_is_settled(const telemetry_state_t *state,
+                                 uint32_t now_ms) {
+    if (!state->have_edge) {
+        return 1U;  /* first press ever, nothing to bounce off */
+    }
+    return ((now_ms - state->last_edge_ms) >= TELEMETRY_DEBOUNCE_MS) ? 1U : 0U;
+}
+
 uint32_t telemetry_update(telemetry_state_t *state, uint32_t button_down,
-                          telemetry_temp_reader_t read_temp,
+                          uint32_t now_ms, telemetry_temp_reader_t read_temp,
                           telemetry_sink_t sink) {
     uint32_t acted = 0U;
 
-    if (button_down && !state->button_was_down) {
+    if (button_down && !state->button_was_down && press_is_settled(state, now_ms)) {
+        state->last_edge_ms = now_ms;
+        state->have_edge    = 1U;
         state->equipment_on = !state->equipment_on;
 
         sink(state->equipment_on ? "equipment/0/state,on\n"

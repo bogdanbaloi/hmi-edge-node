@@ -20,8 +20,6 @@
 
 #include <stdint.h>
 
-/// Crude debounce after a press, at the 4 MHz reset clock.
-#define BUTTON_DEBOUNCE_LOOPS 120000UL
 
 /**
  * @brief Called by the startup code before `.data` is copied and before main.
@@ -34,11 +32,6 @@ void SystemInit(void) {
     core_enable_fpu();
 }
 
-static void busy_wait(volatile uint32_t loops) {
-    while (loops--) {
-        __asm__ volatile("nop");
-    }
-}
 
 /// Read once at start-up: these are burned at the factory and never change.
 static temperature_cal_t g_cal;
@@ -67,15 +60,19 @@ int main(void) {
     g_cal.ts_cal2     = adc_ts_cal2();
     g_cal.vrefint_cal = adc_vrefint_cal();
 
+    core_tick_init();
+
     telemetry_state_t state;
     telemetry_init(&state);
 
     for (;;) {
-        uint32_t pressed = board_button_pressed();
-        if (telemetry_update(&state, pressed, read_die_temperature,
-                             uart_send_string)) {
+        /* Nothing here stalls. Debouncing is a decision telemetry makes from
+           the clock, not a delay this loop sits through, so the processor
+           stays free for whatever gets added next. */
+        const uint32_t pressed = board_button_pressed();
+        if (telemetry_update(&state, pressed, core_millis(),
+                             read_die_temperature, uart_send_string)) {
             board_led_set(state.equipment_on);
-            busy_wait(BUTTON_DEBOUNCE_LOOPS);
         }
     }
 }

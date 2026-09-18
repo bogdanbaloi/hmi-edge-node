@@ -108,11 +108,17 @@ static int32_t fake_temp_reader(void) {
     return g_fake_deci;
 }
 
+/// A fake clock, advanced well past the debounce window between presses so
+/// these cases keep testing the FRAME FORMAT and nothing else. Debounce has
+/// its own tests, where the clock is the thing under examination.
+static uint32_t g_fake_ms;
+
 /// One press: down edge then release, with the reader returning `deci`.
 static void press_button(telemetry_state_t *state, int32_t deci) {
     g_fake_deci = deci;
-    (void)telemetry_update(state, 1U, fake_temp_reader, capture_sink);
-    (void)telemetry_update(state, 0U, fake_temp_reader, capture_sink);
+    g_fake_ms += TELEMETRY_DEBOUNCE_MS * 10U;
+    (void)telemetry_update(state, 1U, g_fake_ms, fake_temp_reader, capture_sink);
+    (void)telemetry_update(state, 0U, g_fake_ms, fake_temp_reader, capture_sink);
 }
 
 /* ------------------------------------------------------------------ */
@@ -249,11 +255,11 @@ static void held_button_emits_nothing_further(void) {
     capture_reset();
 
     g_fake_deci = 210;
-    CHECK(telemetry_update(&state, 1U, fake_temp_reader, capture_sink) == 1U);
+    CHECK(telemetry_update(&state, 1U, g_fake_ms, fake_temp_reader, capture_sink) == 1U);
     const size_t after_edge = g_line_count;
 
     for (unsigned i = 0U; i < 50U; i++) {
-        CHECK(telemetry_update(&state, 1U, fake_temp_reader, capture_sink) == 0U);
+        CHECK(telemetry_update(&state, 1U, g_fake_ms, fake_temp_reader, capture_sink) == 0U);
     }
     CHECK(g_line_count == after_edge);
 }
@@ -267,7 +273,7 @@ static void release_emits_nothing(void) {
     press_button(&state, 210);
     const size_t after_press = g_line_count;
 
-    CHECK(telemetry_update(&state, 0U, fake_temp_reader, capture_sink) == 0U);
+    CHECK(telemetry_update(&state, 0U, g_fake_ms, fake_temp_reader, capture_sink) == 0U);
     CHECK(g_line_count == after_press);
 }
 
@@ -334,7 +340,7 @@ static void invalid_reading_emits_state_only(void) {
     /* The edge still happened, so the caller still updates the LED. */
     telemetry_init(&state);
     g_fake_deci = TEMPERATURE_INVALID;
-    CHECK(telemetry_update(&state, 1U, fake_temp_reader, capture_sink) == 1U);
+    CHECK(telemetry_update(&state, 1U, g_fake_ms, fake_temp_reader, capture_sink) == 1U);
 }
 
 /// The headline case: the exact bytes of one press, read the way the host
@@ -393,6 +399,103 @@ static void session_stream_stays_parseable(void) {
 
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/* Debounce. This is the part that used to be a delay loop in main.c,  */
+/* where nothing could test it. As a decision about time it can be     */
+/* driven with any clock, including one about to wrap.                 */
+/* ------------------------------------------------------------------ */
+
+/// One down edge at `ms`, then release. Returns what telemetry decided.
+static uint32_t edge_at(telemetry_state_t *state, uint32_t ms) {
+    g_fake_deci = 235;
+    const uint32_t acted =
+        telemetry_update(state, 1U, ms, fake_temp_reader, capture_sink);
+    (void)telemetry_update(state, 0U, ms, fake_temp_reader, capture_sink);
+    return acted;
+}
+
+/// Contact bounce is a burst of edges over a few milliseconds. Exactly one of
+/// them is the press.
+static void bounce_burst_yields_one_press(void) {
+    telemetry_state_t state;
+    telemetry_init(&state);
+    capture_reset();
+
+    CHECK(edge_at(&state, 1000U) == 1U);   /* the real press */
+    CHECK(edge_at(&state, 1002U) == 0U);   /* contacts still ringing */
+    CHECK(edge_at(&state, 1005U) == 0U);
+    CHECK(edge_at(&state, 1011U) == 0U);
+    CHECK(edge_at(&state, 1020U) == 0U);
+
+    /* One press means one state frame plus one temperature frame. */
+    CHECK(g_line_count == 2U);
+    CHECK_STR(g_lines[0], "equipment/0/state,on\n");
+}
+
+/// Past the window it is a person pressing again, not the contacts.
+static void press_after_the_window_is_accepted(void) {
+    telemetry_state_t state;
+    telemetry_init(&state);
+    capture_reset();
+
+    CHECK(edge_at(&state, 1000U) == 1U);
+    CHECK(edge_at(&state, 1000U + TELEMETRY_DEBOUNCE_MS - 1U) == 0U);
+    CHECK(edge_at(&state, 1000U + TELEMETRY_DEBOUNCE_MS) == 1U);
+
+    /* Accepted twice, so the equipment toggled back off. */
+    CHECK_STR(g_lines[0], "equipment/0/state,on\n");
+    CHECK_STR(g_lines[2], "equipment/0/state,off\n");
+}
+
+/// The very first press has no previous edge to measure against, and must not
+/// be swallowed just because the clock happens to read zero.
+static void first_press_is_never_swallowed(void) {
+    telemetry_state_t state;
+    telemetry_init(&state);
+    capture_reset();
+
+    CHECK(edge_at(&state, 0U) == 1U);
+    CHECK(g_line_count == 2U);
+}
+
+/**
+ * The case a delay loop could never be asked about.
+ *
+ * The clock wraps every 49 days. Written as `now >= last + DEBOUNCE` the sum
+ * would overflow near the top and the comparison would go false, so the button
+ * would go dead until the counter came round. Subtraction has no such hole.
+ */
+static void debounce_survives_the_clock_wrap(void) {
+    telemetry_state_t state;
+    telemetry_init(&state);
+    capture_reset();
+
+    const uint32_t near_top = UINT32_MAX - 10U;
+
+    CHECK(edge_at(&state, near_top) == 1U);
+    /* 5 ms later, having wrapped through zero on the way. */
+    CHECK(edge_at(&state, near_top + 5U) == 0U);
+    /* And a genuine press once the window has passed. */
+    CHECK(edge_at(&state, near_top + TELEMETRY_DEBOUNCE_MS) == 1U);
+}
+
+/// A held button still emits nothing, however long it is held. Debounce is
+/// about edges, and holding produces none.
+static void holding_across_the_window_emits_once(void) {
+    telemetry_state_t state;
+    telemetry_init(&state);
+    capture_reset();
+
+    g_fake_deci = 235;
+    CHECK(telemetry_update(&state, 1U, 500U, fake_temp_reader, capture_sink) == 1U);
+    for (uint32_t ms = 501U; ms < 900U; ms += 7U) {
+        CHECK(telemetry_update(&state, 1U, ms, fake_temp_reader, capture_sink) == 0U);
+    }
+    CHECK(g_line_count == 2U);
+}
+
+/* ------------------------------------------------------------------ */
+
 int main(void) {
     (void)printf("contract: firmware frames vs industrial-hmi parser\n");
 
@@ -405,6 +508,12 @@ int main(void) {
     invalid_reading_emits_state_only();
     press_stream_parses_as_two_readings();
     session_stream_stays_parseable();
+
+    bounce_burst_yields_one_press();
+    press_after_the_window_is_accepted();
+    first_press_is_never_swallowed();
+    debounce_survives_the_clock_wrap();
+    holding_across_the_window_emits_once();
 
     if (g_failures == 0U) {
         (void)printf("OK: %u checks passed\n", g_checks);

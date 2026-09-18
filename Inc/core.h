@@ -1,6 +1,8 @@
 #ifndef CORE_H
 #define CORE_H
 
+#include <stdint.h>
+
 /**
  * @file core.h
  * @brief Cortex-M4 core bring-up. Not an STM32 peripheral, not board specific.
@@ -33,5 +35,32 @@
  * fails by going quiet. So the switch gets flipped once, as early as possible.
  */
 void core_enable_fpu(void);
+
+/**
+ * @brief Start the millisecond clock. Call once, before the main loop.
+ *
+ * Runs SysTick free at its full 24-bit range rather than reloading every
+ * millisecond. See core.c for why the obvious design loses time.
+ */
+void core_tick_init(void);
+
+/**
+ * @brief Milliseconds since core_tick_init.
+ *
+ * Polled, not interrupt driven: this firmware enables no interrupts at all.
+ * Elapsed time comes from the difference between two readings of the counter,
+ * so a caller that goes away for several milliseconds still gets all of them
+ * back. `uart_send_string` does exactly that, blocking about 2.7 ms per press
+ * at 115200.
+ *
+ * The one real limit: call it at least once every 4.19 seconds, or a whole
+ * counter wrap passes unseen and that time is lost. The main loop calls it
+ * every iteration, so this is documentation rather than a caution.
+ *
+ * The returned value wraps after about 49 days. Callers must compare with
+ * subtraction (`now - then >= delay`) and never with `>=` on absolute values,
+ * because unsigned subtraction stays correct across the wrap.
+ */
+uint32_t core_millis(void);
 
 #endif /* CORE_H */
