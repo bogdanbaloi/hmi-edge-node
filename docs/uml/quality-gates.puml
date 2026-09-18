@@ -51,10 +51,14 @@ note right of Ss
   Catches: a name that stops telling
   a story, a function that runs away,
   a pointer that should be const.
-  Misses: the two adjacent uint32_t
-  of temperature_deci_celsius. That
-  risk is handled by typing, not
-  by linting.
+  Missed: the two adjacent uint32_t of
+  temperature_deci_celsius, where a swap
+  compiled fine and returned a plausible
+  wrong number. Fixed by giving them
+  distinct types, so gate 1 rejects it
+  now. The lesson stands: when a gate
+  cannot see a risk, move the risk to a
+  gate that can.
 end note
 
 note right of Xx

@@ -49,9 +49,13 @@ static temperature_cal_t g_cal;
  * lives in the composition root and not in either module.
  */
 static int32_t read_die_temperature(void) {
-    const uint32_t ts_raw      = adc_temp_read();
-    const uint32_t vrefint_raw = adc_vref_read();
-    return temperature_deci_celsius(&g_cal, ts_raw, vrefint_raw);
+    /* The labelling happens here, not in `adc`. Having the driver return these
+       types would read better, but it would make the HAL depend on application
+       code and invert the layering. This is the composition root, where the
+       driver and the maths already meet, so it is where they get their names. */
+    const ts_counts_t      ts   = { adc_temp_read() };
+    const vrefint_counts_t vref = { adc_vref_read() };
+    return temperature_deci_celsius(&g_cal, ts, vref);
 }
 
 int main(void) {

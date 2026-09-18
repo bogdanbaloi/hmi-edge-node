@@ -8,8 +8,19 @@ skinparam shadowing false
 
 start
 
-:ts_raw = adc_temp_read()      (channel 17)
-vrefint_raw = adc_vref_read()  (channel 0);
+:main.c labels the two readings
+ts   : ts_counts_t      = adc_temp_read()  (channel 17)
+vref : vrefint_counts_t = adc_vref_read()  (channel 0);
+note right
+  Distinct types on purpose. Passed the
+  wrong way round, this does not compile.
+  As bare uint32_t it compiled fine and
+  returned a plausible wrong temperature,
+  which nothing else in the project could
+  catch: the mistake would live in main.c,
+  and no host test reaches main.c.
+  Costs zero bytes, the structs compile away.
+end note
 
 if (calibration usable?) then (no)
   #ffdddd:blank flash, zero reference,

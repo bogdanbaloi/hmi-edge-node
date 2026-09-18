@@ -82,6 +82,21 @@ convert to degrees: that is arithmetic, and it lives in `temperature` where a
 host test can reach it. The adapter that joins the two sits in `main.c`, the
 only place a driver and pure logic are supposed to meet.
 
+That adapter is also where the two readings get their types. The conversion
+needs counts from the temperature channel and counts from VREFINT, both
+`uint32_t`, both in the same range. Passed as bare integers they sat side by
+side in the signature, and swapping them compiled cleanly and returned a
+temperature that looked entirely reasonable. Nothing caught it: not the
+compiler, not clang-tidy, and not the tests, because the mistake would live in
+`main.c`, which no host test reaches.
+
+They now have distinct types, `ts_counts_t` and `vrefint_counts_t`, so a swap
+is a compile error instead of a plausible wrong number. The wrapping happens in
+`main.c` rather than in `adc`, which would read better but would make the HAL
+depend on application code and invert the layering. **The whole thing costs
+zero bytes**: `temperature.o` is 162 bytes before and after, because the
+single-field structs compile away entirely.
+
 `core` is separate from `board` on purpose. `board` owns what changes when you
 swap the board; `core` owns the CPU itself, which is the same on every
 Cortex-M4 and is described by the ARM architecture manual rather than by

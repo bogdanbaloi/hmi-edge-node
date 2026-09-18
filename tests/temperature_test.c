@@ -71,22 +71,39 @@ static const temperature_cal_t k_typical = {
     TS_CAL1_TYPICAL, TS_CAL2_TYPICAL, VREFINT_CAL_TYPICAL
 };
 
+/**
+ * Shorthand that wraps two plain numbers into the typed readings.
+ *
+ * The distinct types exist to stop a swap in PRODUCTION code, where nothing
+ * else would catch it. Here the assertions do: every case below states the
+ * exact value it expects, so a swapped pair fails the test immediately. That
+ * is why a helper taking two `uint32_t` is safe in the test and would not be
+ * safe in main.c, and it keeps the case tables readable instead of burying
+ * them under compound literals.
+ */
+static int32_t deci_of(const temperature_cal_t *cal, uint32_t ts_raw,
+                       uint32_t vrefint_raw) {
+    const ts_counts_t      ts   = { ts_raw };
+    const vrefint_counts_t vref = { vrefint_raw };
+    return temperature_deci_celsius(cal, ts, vref);
+}
+
 /* ------------------------------------------------------------------ */
 
 /// At the calibration VDDA, the two calibration points must come back exactly.
 /// If these drift, the line itself is wrong, not just its scaling.
 static void calibration_points_are_exact(void) {
     /* vrefint_raw == vrefint_cal means VDDA is exactly 3.0 V: no rescale. */
-    CHECK_EQ(temperature_deci_celsius(&k_typical, TS_CAL1_TYPICAL,
+    CHECK_EQ(deci_of(&k_typical, TS_CAL1_TYPICAL,
                                       VREFINT_CAL_TYPICAL), 300);
-    CHECK_EQ(temperature_deci_celsius(&k_typical, TS_CAL2_TYPICAL,
+    CHECK_EQ(deci_of(&k_typical, TS_CAL2_TYPICAL,
                                       VREFINT_CAL_TYPICAL), 1300);
 }
 
 /// Halfway between the calibration counts is halfway up the range.
 static void midpoint_interpolates(void) {
     const uint32_t midpoint = (TS_CAL1_TYPICAL + TS_CAL2_TYPICAL) / 2U;
-    CHECK_NEAR(temperature_deci_celsius(&k_typical, midpoint,
+    CHECK_NEAR(deci_of(&k_typical, midpoint,
                                         VREFINT_CAL_TYPICAL),
                800, 10);  /* 80.0 C, allow a tenth of slack */
 }
@@ -97,7 +114,7 @@ static void vdda_correction_recovers_the_real_temperature(void) {
     /* The same die voltage read at 3.3 V instead of 3.0 V. */
     const uint32_t ts_at_3v3 = (TS_CAL1_TYPICAL * 3000U) / 3300U;
 
-    CHECK_NEAR(temperature_deci_celsius(&k_typical, ts_at_3v3, VREFINT_AT_3V3),
+    CHECK_NEAR(deci_of(&k_typical, ts_at_3v3, VREFINT_AT_3V3),
                300, 10);
 }
 
@@ -113,7 +130,7 @@ static void skipping_the_correction_would_be_wildly_wrong(void) {
     const uint32_t ts_at_3v3 = (TS_CAL1_TYPICAL * 3000U) / 3300U;
 
     const int32_t correct =
-        temperature_deci_celsius(&k_typical, ts_at_3v3, VREFINT_AT_3V3);
+        deci_of(&k_typical, ts_at_3v3, VREFINT_AT_3V3);
 
     /* What the naive formula would produce, inlined here so the comparison is
        visible rather than asserted on faith. */
@@ -132,7 +149,7 @@ static void hotter_counts_read_hotter(void) {
 
     for (uint32_t raw = TS_CAL1_TYPICAL; raw <= TS_CAL2_TYPICAL; raw += 10U) {
         const int32_t deci =
-            temperature_deci_celsius(&k_typical, raw, VREFINT_CAL_TYPICAL);
+            deci_of(&k_typical, raw, VREFINT_CAL_TYPICAL);
         CHECK(deci != TEMPERATURE_INVALID);
         if (previous != TEMPERATURE_INVALID) {
             CHECK(deci > previous);
@@ -146,7 +163,7 @@ static void hotter_counts_read_hotter(void) {
 static void below_zero_is_representable(void) {
     /* Well below the 30 C calibration point. */
     const int32_t deci =
-        temperature_deci_celsius(&k_typical, TS_CAL1_TYPICAL - 100U,
+        deci_of(&k_typical, TS_CAL1_TYPICAL - 100U,
                                  VREFINT_CAL_TYPICAL);
     CHECK(deci != TEMPERATURE_INVALID);
     CHECK(deci < 0);
@@ -160,7 +177,7 @@ static void below_zero_is_representable(void) {
 static void blank_flash_is_rejected(void) {
     const temperature_cal_t all_blank = { 0xFFFFU, 0xFFFFU, 0xFFFFU };
     CHECK(temperature_cal_usable(&all_blank) == 0U);
-    CHECK_EQ(temperature_deci_celsius(&all_blank, 1000U, 1500U),
+    CHECK_EQ(deci_of(&all_blank, 1000U, 1500U),
              TEMPERATURE_INVALID);
 
     /* One blank field is enough: a wrong address may hit only part of it. */
@@ -177,24 +194,24 @@ static void degenerate_calibration_is_rejected(void) {
     /* Equal points: the line has no span, so it would divide by zero. */
     const temperature_cal_t flat = { 1200U, 1200U, VREFINT_CAL_TYPICAL };
     CHECK(temperature_cal_usable(&flat) == 0U);
-    CHECK_EQ(temperature_deci_celsius(&flat, 1200U, VREFINT_CAL_TYPICAL),
+    CHECK_EQ(deci_of(&flat, 1200U, VREFINT_CAL_TYPICAL),
              TEMPERATURE_INVALID);
 }
 
 static void degenerate_readings_are_rejected(void) {
     /* A dead reference reading would divide by zero. */
-    CHECK_EQ(temperature_deci_celsius(&k_typical, 1000U, 0U),
+    CHECK_EQ(deci_of(&k_typical, 1000U, 0U),
              TEMPERATURE_INVALID);
 
     /* Neither reading can exceed 12-bit full scale. */
-    CHECK_EQ(temperature_deci_celsius(&k_typical, 4096U, VREFINT_CAL_TYPICAL),
+    CHECK_EQ(deci_of(&k_typical, 4096U, VREFINT_CAL_TYPICAL),
              TEMPERATURE_INVALID);
-    CHECK_EQ(temperature_deci_celsius(&k_typical, 1000U, 4096U),
+    CHECK_EQ(deci_of(&k_typical, 1000U, 4096U),
              TEMPERATURE_INVALID);
 
     /* A reference reading far below the calibration blows the corrected value
        past anything physical. Rejected rather than scaled into nonsense. */
-    CHECK_EQ(temperature_deci_celsius(&k_typical, 4095U, 1U),
+    CHECK_EQ(deci_of(&k_typical, 4095U, 1U),
              TEMPERATURE_INVALID);
 }
 
@@ -202,7 +219,7 @@ static void degenerate_readings_are_rejected(void) {
 /// reference reading far below calibration inflates the corrected count and
 /// would otherwise yield hundreds of degrees.
 static void implausible_results_are_rejected(void) {
-    CHECK_EQ(temperature_deci_celsius(&k_typical, 4000U, 700U),
+    CHECK_EQ(deci_of(&k_typical, 4000U, 700U),
              TEMPERATURE_INVALID);
 }
 
@@ -225,7 +242,7 @@ static void whole_input_domain_is_monotonic(void) {
 
         for (uint32_t ts = 0U; ts <= 4095U; ts++) {
             const int32_t deci =
-                temperature_deci_celsius(&k_typical, ts, vref);
+                deci_of(&k_typical, ts, vref);
 
             if (deci == TEMPERATURE_INVALID) {
                 if (seen_valid) {

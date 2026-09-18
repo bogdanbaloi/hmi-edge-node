@@ -51,6 +51,38 @@ typedef struct {
 } temperature_cal_t;
 
 /**
+ * Raw counts from the temperature-sensor channel, in their own type.
+ *
+ * ## Why a struct around one number
+ *
+ * The conversion needs two readings, both `uint32_t`, both in the same range.
+ * Passed as bare integers they sit side by side in the signature, and swapping
+ * them at the call site compiles cleanly and returns a temperature that looks
+ * entirely reasonable. Nothing catches it: not the compiler, not clang-tidy
+ * (checked), and not the tests, because the mistake would live in main.c,
+ * which no host test reaches.
+ *
+ * That is the worst failure class in this firmware: silent, plausible, and
+ * pointed at a dashboard. The rest of the piece treats that class by making
+ * the mistake impossible rather than detectable, and this is the same move in
+ * the type system. Swap these two now and it does not compile.
+ *
+ * The wrapping happens in main.c, not in `adc`. Having the driver return these
+ * types would read better at the call site but would make the HAL depend on
+ * application code, inverting the layering. The composition root is where the
+ * driver and the maths already meet, so it is where the labelling belongs.
+ */
+typedef struct {
+    uint32_t counts;
+} ts_counts_t;
+
+/// Raw counts from the VREFINT channel. Distinct from ::ts_counts_t on
+/// purpose: see the note there.
+typedef struct {
+    uint32_t counts;
+} vrefint_counts_t;
+
+/**
  * @brief Is this calibration block usable at all?
  *
  * Guards the two divisions below AND catches blank flash (0xFFFF), which is
@@ -63,15 +95,18 @@ uint32_t temperature_cal_usable(const temperature_cal_t *cal);
 
 /**
  * @brief Die temperature in tenths of a degree Celsius.
- * @param cal          Factory constants. Never NULL.
- * @param ts_raw       Raw counts from the temperature-sensor channel.
- * @param vrefint_raw  Raw counts from the VREFINT channel, for the VDDA scale.
+ * @param cal   Factory constants. Never NULL.
+ * @param ts    Counts from the temperature-sensor channel.
+ * @param vref  Counts from the VREFINT channel, for the VDDA scale.
  * @return Tenths of a degree, or ::TEMPERATURE_INVALID when no honest answer
  *         exists: unusable calibration, a zero or out-of-scale reading, or a
  *         result outside the sensor's plausible range (-50 C to 150 C).
  *         Truncates toward zero.
+ *
+ * The two readings carry distinct types, so passing them the wrong way round
+ * is a compile error rather than a plausible wrong number. See ::ts_counts_t.
  */
-int32_t temperature_deci_celsius(const temperature_cal_t *cal, uint32_t ts_raw,
-                                 uint32_t vrefint_raw);
+int32_t temperature_deci_celsius(const temperature_cal_t *cal, ts_counts_t ts,
+                                 vrefint_counts_t vref);
 
 #endif /* TEMPERATURE_H */
