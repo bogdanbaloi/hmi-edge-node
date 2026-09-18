@@ -1,5 +1,7 @@
 # hmi-edge-node
 
+[![CI](https://github.com/bogdanbaloi/hmi-edge-node/actions/workflows/ci.yml/badge.svg)](https://github.com/bogdanbaloi/hmi-edge-node/actions/workflows/ci.yml)
+
 Bare-metal STM32 firmware for a **Nucleo-L476RG** (ARM Cortex-M4). It is the
 device side of a hardware/software integration demo: it reads the physical
 world (a button, the MCU's internal temperature sensor) and streams telemetry
@@ -117,6 +119,21 @@ catches wrapped arithmetic.
 
 One test asserts the *size of the error* you get by skipping the VREFINT
 correction, so that nobody simplifies it away without the build objecting.
+
+## CI
+
+Every push and every pull request runs three jobs, none of which needs a board:
+
+| Job | Question it answers |
+| --- | --- |
+| Host tests | does the logic still do what it claims |
+| Cross-compile | does it still build **and link** for the real Cortex-M4 |
+| Docs discipline | do the diagrams still validate, does Doxygen still run clean |
+
+The cross-compile uses the same flags as STM32CubeIDE and performs a full link,
+because a missing symbol or an overflowing section only shows up at link time.
+The docs job enforces the rule that every new piece carries a diagram validated
+with `plantuml -checkonly`, so the discipline is checked rather than remembered.
 
 ## Pin map
 
