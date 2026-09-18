@@ -149,6 +149,59 @@ not the linker, and not the host tests or CI, because a PC has a working FPU.
 `core_enable_fpu()` runs from `SystemInit`, before `.data` is copied and before
 `main`, which is the earliest point any C code could execute a float.
 
+
+### A fault that says something
+
+The FPU story above ends with the board freezing in the startup file's default
+handler. That handler is two instructions:
+
+```
+Default_Handler:
+Infinite_Loop:
+  b Infinite_Loop
+```
+
+Every fault vector points there. So a hard fault looks exactly like a working
+board that happens to be idle: LED unchanged, serial silent, nothing to see.
+You find out only because the button stopped doing anything, and then you have
+no idea why.
+
+That is the same class of problem as the rest of this file, and it got the same
+treatment: make the failure say something.
+
+| Blinks | Fault |
+| --- | --- |
+| 2 | HardFault |
+| 3 | MemManage |
+| 4 | BusFault |
+| 5 | UsageFault |
+
+The LED repeats the count forever, with a longer gap between repetitions. You
+count it from across the room and you know what happened, with no debugger
+attached.
+
+Three details that are not arbitrary:
+
+**Counts start at two, never one.** A single blink is hard to tell apart from a
+board flickering as it resets.
+
+**The handler calls `board_init` again before blinking.** If the fault lands
+before `main` got that far, the GPIO clock is still gated off and the LED stays
+dark, which is the exact silence the whole thing exists to remove. Repeating the
+setup costs a few register writes.
+
+**The delays are nop loops, not `core_millis`.** A fault handler must not depend
+on SysTick still running, on interrupts, or on any state the fault may have
+corrupted. The timing is rough and that is fine: the eye only has to tell a
+blink from a gap.
+
+The startup file is not edited. It declares each handler `.weak` and aliases it
+to `Default_Handler`, so defining the same four symbols in `Src/fault.c`
+replaces those aliases at link time, and the vendor-generated file stays
+untouched. Verified by dumping the linked vector table: offset `0x0C` holds
+`0x080004c1`, which is `HardFault_Handler`, not `Default_Handler`.
+
+`docs/uml/fault-signal.puml` has the before and after.
 ## Tests
 
 ```
@@ -156,8 +209,8 @@ mingw32-make -C tests run
 ```
 
 No board, no test framework, no dependency on the other repo. It compiles the
-pure-logic sources with the desktop compiler already on PATH. Two binaries, two
-different questions:
+pure-logic sources with the desktop compiler already on PATH. Three binaries,
+three different questions:
 
 ### `contract_frame_test`: does the wire format still match?
 
@@ -191,9 +244,28 @@ catches wrapped arithmetic.
 One test asserts the *size of the error* you get by skipping the VREFINT
 correction, so that nobody simplifies it away without the build objecting.
 
+
+### `fault_test`: can a person actually tell the patterns apart?
+
+Most of a fault handler is not testable on a host. Whether the LED physically
+lights is a hardware question, and whether the vector table points at the new
+handlers is answered by `objdump` on the linked image, not by a PC.
+
+What is left is small and it is the part the whole idea rests on: four faults
+must map to four **different** counts, and every count must be small enough to
+count by eye. Two faults blinking the same number carry no more information
+than a dead board.
+
+So the test pins the distinctness, the 2-to-9 range, and the exact mapping the
+README and the header both document. A blink code you cannot look up is just a
+blinking light.
+
+The kinds live in a table rather than four separate assertions, so a fifth
+fault vector added later has to be added there too, and the properties still
+have to hold for it.
 ## CI
 
-Every push and every pull request runs three jobs, none of which needs a board:
+Every push and every pull request runs four jobs, none of which needs a board:
 
 | Job | Question it answers |
 | --- | --- |
@@ -261,3 +333,5 @@ port as an argument). Press the button and watch the frames stream.
 - Counts to degrees (the conversion and its guards): `docs/uml/temperature.puml`.
 - Quality gates (what each one catches, and what it cannot): `docs/uml/quality-gates.puml`.
 - Debounce (a decision about time, not a pause): `docs/uml/debounce.puml`.
+- FPU (the two switches, and what happens if you flip only one): `docs/uml/fpu-enable.puml`.
+- Fault signal (what the board does instead of going quiet): `docs/uml/fault-signal.puml`.
