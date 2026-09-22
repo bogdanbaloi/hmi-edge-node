@@ -329,21 +329,26 @@ Every line carries the time it reached the PC, and the same lines are saved to
 shared afterwards:
 
 ```
-14:02:11.482  [FF FE 00 FF F8]   (no line end)
-14:02:13.910  equipment/0/state,on
-14:02:13.910  temp,23.6
+15:24:14.751  [FF]   (no line end)
+15:24:14.970  equipment/0/state,on
+15:24:14.970  temp,23.6
 ```
 
-Any byte that is not printable ASCII is shown as hex in brackets, never hidden.
-The first line above is the shape a press of the black reset button produces: a
-few bytes with no line end, printed on a line of their own. The byte values in
-the example are illustrative. The real ones are whatever your log shows.
+That is a real capture. Any byte that is not printable ASCII is shown as hex in
+square brackets, never hidden, and square brackets mean nothing else: the
+monitor's own notes, like `(no line end)`, use round ones.
 
-That separation is deliberate. The first version of the monitor read whole
-lines as ASCII. Every byte above `0x7F` became `?`, and bytes with no line end
-waited for the next `\n`, so reset noise was shown glued to the front of the
-next frame, seconds later, as `?????equipment/0/state,on`. From that output
-alone there was no way to tell what arrived, or when. `docs/uml/serial-monitor.puml`
+The first line is a press of the black reset button. Measured on 2026-09-22,
+**every reset puts exactly one byte on the line, `0xFF`**: 15 resets, 15 bytes,
+no other value, and every frame after them arrived clean.
+
+That separation is deliberate, and it is what made the measurement possible.
+The first version of the monitor read whole lines as ASCII. Every byte above
+`0x7F` became `?`, and bytes with no line end waited for the next `\n`, so
+several resets in a row were shown glued to the front of the next frame as
+`?????equipment/0/state,on`. That looked like one reset producing a burst of
+random noise. Given the new capture, it was most likely five resets, one `0xFF`
+each: the old output cannot be replayed to prove it. `docs/uml/serial-monitor.puml`
 shows how the two cases are told apart now.
 
 ## Docs

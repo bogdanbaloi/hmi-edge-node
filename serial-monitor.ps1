@@ -39,7 +39,10 @@ param(
 # stopping never loses what was already on screen.
 
 # Printable ASCII, except the two brackets: those are reserved for the hex
-# groups, so every [..] in the output is unambiguously raw bytes.
+# groups, so every [..] in the output is unambiguously raw bytes. The monitor's
+# own notes, like (connected) or (no line end), use round brackets for the same
+# reason. The first version printed [connected], which broke that promise on
+# the very first line of every session.
 function Test-Printable([byte]$B) {
     return ($B -ge 0x20 -and $B -le 0x7E -and $B -ne 0x5B -and $B -ne 0x5D)
 }
@@ -136,7 +139,7 @@ try {
         try {
             $p = New-Object System.IO.Ports.SerialPort $Port, $Baud, None, 8, one
             $p.Open()
-            Out-Line (Get-Date) "[connected]" "Green"
+            Out-Line (Get-Date) "(connected)" "Green"
             $waitAnnounced = $false
             while ($true) {
                 $n = $p.BytesToRead
@@ -152,7 +155,7 @@ try {
             if ($script:pending.Count -gt 0) { Write-PendingLine "(no line end, port lost)" }
             # Said once per outage, not every 2 s, so the log stays readable.
             if (-not $waitAnnounced) {
-                Out-Line (Get-Date) ("[waiting for $Port ... " + $_.Exception.Message + "]") "DarkYellow"
+                Out-Line (Get-Date) ("(waiting for $Port ... " + $_.Exception.Message + ")") "DarkYellow"
                 $waitAnnounced = $true
             }
             Start-Sleep -Seconds 2
