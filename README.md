@@ -340,7 +340,7 @@ monitor's own notes, like `(no line end)`, use round ones.
 
 The first line is a press of the black reset button, captured on 2026-09-22
 with the firmware of that day: **every reset put exactly one byte on the line,
-`0xFF`**, 35 resets out of 35, no other value.
+`0xFF`**, 46 resets out of 46, no other value.
 
 That byte is gone now, and the monitor is what found it. A single clean `0xFF`
 is what the line looks like after one short low pulse: a start bit, then eight
@@ -348,7 +348,7 @@ ones. `board_init` switched the TX pin, `PA2`, to alternate function mode
 before choosing which function, so for a few instructions it sat on AF0,
 which is not the UART. Writing the function select (`AFRL`) first and the
 mode (`MODER`) second, the order ST's own `HAL_GPIO_Init` uses, took it from
-35 out of 35 resets to 0 out of at least 6, with nothing else changed.
+46 out of 46 resets to 0 out of at least 6, with nothing else changed.
 
 It mattered beyond the monitor. Nothing ended the line between that `0xFF`
 and the first frame after a reset, so on the wire the frame arrived with a
@@ -364,6 +364,15 @@ several resets in a row were shown glued to the front of the next frame as
 random noise. Given the new capture, it was most likely five resets, one `0xFF`
 each: the old output cannot be replayed to prove it. `docs/uml/serial-monitor.puml`
 shows how the two cases are told apart now.
+
+Two limits, both seen in the same captures. Bytes that arrive less than 100 ms
+apart are one line, so a reset followed at once by a press shows as
+`[FF]equipment/0/state,on`: the byte is still visible, just not on a line of
+its own. And bytes sent while no monitor has the port open are held somewhere
+between the ST-Link and the PC and delivered together when one opens, which is
+most likely how three resets made before a session showed up as a single
+`[FF FF FF]`. Count bytes, not lines: counting lines is how an earlier
+version of this README said 35 resets where the logs held 46.
 
 ## Docs
 
