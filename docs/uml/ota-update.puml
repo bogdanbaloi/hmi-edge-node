@@ -1,0 +1,53 @@
+@startuml ota-update
+' The OTA update state machine on the target.
+' Grounded in Src/ota_update.c and in industrial-hmi
+' docs/protocols/uart-flash-v1.md, sections 4 to 6 (AGREED).
+
+title The update session on the board
+
+skinparam shadowing false
+
+[*] --> IDLE
+
+state IDLE : normal mode, telemetry runs
+state RECEIVING : between BEGIN and COMMIT\ntelemetry quiet
+state COMMITTED : bank selected\nreset requested
+
+IDLE --> RECEIVING : BEGIN, fits, erase OK\n/ ACK
+RECEIVING --> RECEIVING : DATA at the expected offset\n/ program, ACK
+RECEIVING --> RECEIVING : BEGIN again\n/ erase, start over, ACK
+RECEIVING --> COMMITTED : COMMIT, all bytes in,\nCRC32 matches, bank selected\n/ ACK, THEN reset
+RECEIVING --> IDLE : ABORT / ACK
+RECEIVING --> IDLE : 10 s silent since\nthe board's last answer
+RECEIVING --> IDLE : flash error / NAK FLASH_ERROR
+RECEIVING --> IDLE : CRC32 differs / NAK VERIFY_FAILED
+IDLE --> IDLE : INFO_REQ / INFO\nCONFIRM / ACK
+
+note right of IDLE
+  A frame with a bad CRC16 is ignored here,
+  answered NAK BAD_CRC only in a session:
+  outside one it is almost always line noise.
+end note
+
+note bottom of RECEIVING
+  **Every message is checked in the same order:**
+  1. shape: can it be understood?   NAK BAD_MESSAGE
+  2. state: is it allowed now?      NAK BAD_STATE
+  3. content: offset, size, CRC32   the specific NAK
+
+  **A repeat does nothing twice.** The same TYPE and SEQ
+  as the last frame answered OK gets that same answer
+  again: no second erase, no second write. A NAK is never
+  remembered, so a clean resend after NAK BAD_CRC is
+  judged again and accepted.
+end note
+
+legend bottom
+  Behind the port, so this logic is tested on a PC first: the flash is a RAM array,
+  the clock a variable, the UART a capture buffer. 73 checks, 15 mutants.
+  The silence counts from the board's LAST ANSWER, not from the last frame:
+  the erase at BEGIN is the board's own work and must not count against
+  the host (spec section 6, Timeouts).
+endlegend
+
+@enduml

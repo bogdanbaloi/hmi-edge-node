@@ -14,8 +14,11 @@ CONTRACT_SRC := contract_frame_test.c frame_gate.c ../Src/telemetry.c
 TEMP_SRC     := temperature_test.c ../Src/temperature.c
 FAULT_SRC    := fault_test.c ../Src/fault.c
 OTA_SRC      := ota_frame_test.c ../Src/ota_frame.c ../Src/crc16.c
+UPDATE_SRC   := ota_update_test.c ../Src/ota_update.c ../Src/ota_frame.c \
+                ../Src/crc16.c
 
-TARGETS := contract_frame_test temperature_test fault_test ota_frame_test
+TARGETS := contract_frame_test temperature_test fault_test ota_frame_test \
+           ota_update_test
 
 .PHONY: all run clean
 
@@ -43,11 +46,18 @@ ota_frame_test: $(OTA_SRC) ../Inc/ota_frame.h ../Inc/ota_frame_parser.h \
                 ../Inc/crc16.h
 	$(CC) $(CFLAGS) -o $@ $(OTA_SRC)
 
+# The update state machine, with the real encoder and parser on both sides of
+# it and a fake board behind its port: flash in RAM, a hand-moved clock.
+ota_update_test: $(UPDATE_SRC) ../Inc/ota_update.h ../Inc/ota_frame.h \
+                 ../Inc/ota_frame_parser.h ../Inc/le_bytes.h
+	$(CC) $(CFLAGS) -o $@ $(UPDATE_SRC)
+
 run: $(TARGETS)
 	./contract_frame_test
 	./temperature_test
 	./fault_test
 	./ota_frame_test
+	./ota_update_test
 
 clean:
 	rm -f $(TARGETS) $(addsuffix .exe,$(TARGETS))
