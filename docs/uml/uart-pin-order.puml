@@ -1,0 +1,47 @@
+@startuml uart-pin-order
+' Why every reset put one 0xFF on the TX line, and the two-line fix.
+' Grounded in Src/board.c (board_init) and the logs of 2026-09-22.
+
+title One 0xFF per reset: the order of two register writes
+
+skinparam shadowing false
+
+concise "PA2 function" as F
+robust "TX line (PA2)" as TX
+
+@0
+F is "analog (reset)"
+TX is high
+
+@10
+F is "AF0 (not the UART)"
+TX is low
+
+@14
+F is "AF7 = USART2_TX"
+TX is high
+
+@0 <-> @10 : reset, then board_init starts
+@10 <-> @14 : MODER written, AFRL not yet
+
+note top of TX
+  BEFORE: MODER = alternate function first, AFRL = AF7 second.
+  For the few instructions in between the pin is on AF0, not the
+  UART, and the line drops. A short low pulse followed by high is
+  read by the ST-Link as a start bit plus eight ones: 0xFF.
+  Measured: 35 resets, 35 bytes, all 0xFF.
+  The low pulse is inferred from the byte, not seen on a scope.
+  That the ORDER causes it is proven by the before/after test.
+end note
+
+legend bottom
+  AFTER: AFRL = AF7 first, MODER = alternate function second, as
+  ST's HAL_GPIO_Init does. The pin enters alternate function mode
+  already connected to the UART, whose idle level is high, so the
+  line never drops. Measured: 0 bytes in at least 6 resets, with
+  nothing else changed between the two tests.
+  Verified in the flashed image, not only in the source: the stores
+  to 0x48000020 (AFRL) come before those to 0x48000000 (MODER).
+endlegend
+
+@enduml

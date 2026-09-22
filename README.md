@@ -338,9 +338,23 @@ That is a real capture. Any byte that is not printable ASCII is shown as hex in
 square brackets, never hidden, and square brackets mean nothing else: the
 monitor's own notes, like `(no line end)`, use round ones.
 
-The first line is a press of the black reset button. Measured on 2026-09-22,
-**every reset puts exactly one byte on the line, `0xFF`**: 15 resets, 15 bytes,
-no other value, and every frame after them arrived clean.
+The first line is a press of the black reset button, captured on 2026-09-22
+with the firmware of that day: **every reset put exactly one byte on the line,
+`0xFF`**, 35 resets out of 35, no other value.
+
+That byte is gone now, and the monitor is what found it. A single clean `0xFF`
+is what the line looks like after one short low pulse: a start bit, then eight
+ones. `board_init` switched the TX pin, `PA2`, to alternate function mode
+before choosing which function, so for a few instructions it sat on AF0,
+which is not the UART. Writing the function select (`AFRL`) first and the
+mode (`MODER`) second, the order ST's own `HAL_GPIO_Init` uses, took it from
+35 out of 35 resets to 0 out of at least 6, with nothing else changed.
+
+It mattered beyond the monitor. Nothing ended the line between that `0xFF`
+and the first frame after a reset, so on the wire the frame arrived with a
+stray byte in front of its sensor id. What the host's parser did with it is
+industrial-hmi's side of the contract; from this side it no longer happens.
+`docs/uml/uart-pin-order.puml` shows the window.
 
 That separation is deliberate, and it is what made the measurement possible.
 The first version of the monitor read whole lines as ASCII. Every byte above
@@ -363,3 +377,4 @@ shows how the two cases are told apart now.
 - FPU (the two switches, and what happens if you flip only one): `docs/uml/fpu-enable.puml`.
 - Fault signal (what the board does instead of going quiet): `docs/uml/fault-signal.puml`.
 - Serial monitor (reset noise versus a real frame, before and after): `docs/uml/serial-monitor.puml`.
+- UART pin order (one 0xFF per reset, and the two-line fix): `docs/uml/uart-pin-order.puml`.
