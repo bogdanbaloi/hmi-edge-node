@@ -209,8 +209,8 @@ mingw32-make -C tests run
 ```
 
 No board, no test framework, no dependency on the other repo. It compiles the
-pure-logic sources with the desktop compiler already on PATH. Four binaries,
-four different questions:
+pure-logic sources with the desktop compiler already on PATH. Five binaries,
+five different questions:
 
 ### `contract_frame_test`: does the wire format still match?
 
@@ -314,6 +314,49 @@ On the board the two modules cost 510 bytes of code (64 for the CRC, 446 for
 the parser), and the linked image grew by 592. No RAM yet: nothing on the
 board creates a parser so far. One will take 270 bytes, a whole frame kept
 raw, because the resync rule needs the bytes back.
+
+
+### `ota_update_test`: does the board answer every message the way the spec says?
+
+The second OTA piece is the state machine, `Src/ota_update.c`: what a message
+means right now, whether it is allowed, what the board does, and what it
+answers. Every rule is from sections 4 to 6 of the agreed spec: `DATA` only
+after `BEGIN`, offsets that follow on exactly, a size that fits, `COMMIT` only
+once every byte is in and the image CRC32 matches, `ABORT` leaving the running
+image alone, and a session that ends after 10 s of silence.
+
+It runs entirely on a PC because everything that exists only on the board sits
+behind a port of function pointers, the same way `telemetry` takes its reader
+and its sink. In the test the inactive bank is a RAM array, the clock is a
+variable moved by hand, and the UART is a capture buffer. The test also plays
+the host: each message goes through the real encoder and the real parser into
+the state machine, and each answer comes back out through a second real parser,
+so the whole receive-and-answer chain is exercised, not the state machine alone.
+
+Two rules are easy to get wrong and each has its own test.
+
+**Nothing happens twice.** When an `ACK` is lost the host resends the same
+frame, and the board must answer again without erasing or writing again. A
+repeat is recognised by TYPE and SEQ together, not SEQ alone, because a
+restarted host counts from 1 again. A `NAK` is never remembered, so a clean
+resend after `NAK BAD_CRC` is judged afresh and accepted.
+
+**The silence counts from the board's last answer, not from the last frame.**
+At `BEGIN` the board erases a whole bank before it answers; that is its own
+work and must not count against the host. One test makes the erase take 8 s
+and the host answer 9 s later, 17 s after its own `BEGIN`, and the session must
+still be open. The comparison is a subtraction, so it survives the 49-day clock
+wrap, and the wrap test checks both before and after zero, because the broken
+addition form fails before zero, not after.
+
+Fifteen mutants, each a realistic mistake, are each caught. Three of them were
+caught only after the tests were fixed: a repeat check by SEQ alone, a timeout
+written as an addition, and a session that forgot to clear its memory. The last
+one hid because the test ended its session with `ABORT`, whose own `ACK`
+overwrote the memory it was meant to check.
+
+On the board the state machine costs 1042 bytes of code and 52 bytes of RAM.
+`docs/uml/ota-update.puml` has the states.
 
 ## CI
 
@@ -442,3 +485,4 @@ The logs held 46.
 - Serial monitor (reset noise versus a real frame, before and after): `docs/uml/serial-monitor.puml`.
 - UART pin order (one 0xFF per reset, and the two-line fix): `docs/uml/uart-pin-order.puml`.
 - OTA frame parser (one byte in, the resync rule): `docs/uml/ota-frame.puml`.
+- OTA update state machine (the session, and what each message may do): `docs/uml/ota-update.puml`.

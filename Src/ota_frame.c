@@ -25,6 +25,7 @@
 #include <string.h>
 
 #include "crc16.h"
+#include "le_bytes.h"
 
 /* Offsets inside a frame. */
 #define OFS_START   0U
@@ -36,25 +37,11 @@
 /// TYPE, SEQ and LEN: what the checksum covers besides the payload.
 #define HEADER_LEN 5U
 
-/* Little-endian, section 3: the low byte goes first. */
-#define LOW_BYTE_MASK   0xFFU
-#define HIGH_BYTE_SHIFT 8U
-
 /* Where seek_start() looks for the next 0xA5. The resync rule reads straight
    off these two names: after a false start the search resumes at the byte
    AFTER it, and after a good frame it starts at whatever came next. */
 #define AFTER_FALSE_START 1U
 #define FROM_FIRST_BYTE   0U
-
-static uint16_t read_le16(const uint8_t *p) {
-    return (uint16_t)((uint16_t)p[0] |
-                      (uint16_t)((uint16_t)p[1] << HIGH_BYTE_SHIFT));
-}
-
-static void write_le16(uint8_t *p, uint16_t value) {
-    p[0] = (uint8_t)(value & LOW_BYTE_MASK);
-    p[1] = (uint8_t)(value >> HIGH_BYTE_SHIFT);
-}
 
 /// Forgets the first n bytes of the candidate.
 static void drop_front(ota_frame_parser_t *parser, uint16_t n) {
@@ -81,14 +68,14 @@ static void seek_start(ota_frame_parser_t *parser, uint16_t from) {
 static ota_frame_status_t deliver(const ota_frame_parser_t *parser,
                                   uint16_t len, ota_frame_sink_t sink,
                                   void *ctx) {
-    const uint16_t sent = read_le16(&parser->raw[OFS_PAYLOAD + len]);
+    const uint16_t sent = le_read16(&parser->raw[OFS_PAYLOAD + len]);
     const uint16_t computed =
         crc16_compute(&parser->raw[OFS_TYPE], (size_t)HEADER_LEN + len);
     const ota_frame_status_t status =
         (computed == sent) ? OTA_FRAME_OK : OTA_FRAME_BAD_CRC;
     ota_frame_t frame;
     frame.type = parser->raw[OFS_TYPE];
-    frame.seq = read_le16(&parser->raw[OFS_SEQ]);
+    frame.seq = le_read16(&parser->raw[OFS_SEQ]);
     frame.len = len;
     frame.payload = &parser->raw[OFS_PAYLOAD];
     if (sink != NULL) {
@@ -104,7 +91,7 @@ static void process(ota_frame_parser_t *parser, ota_frame_sink_t sink,
         if (parser->count < OFS_PAYLOAD) {
             return;  /* LEN not known yet */
         }
-        const uint16_t len = read_le16(&parser->raw[OFS_LEN]);
+        const uint16_t len = le_read16(&parser->raw[OFS_LEN]);
         if (len > OTA_FRAME_MAX_PAYLOAD) {
             /* False start. Resume from the byte after it, never skip LEN. */
             seek_start(parser, AFTER_FALSE_START);
@@ -157,12 +144,12 @@ size_t ota_frame_encode(const ota_frame_t *frame, uint8_t *out,
     }
     out[OFS_START] = OTA_FRAME_START;
     out[OFS_TYPE] = frame->type;
-    write_le16(&out[OFS_SEQ], frame->seq);
-    write_le16(&out[OFS_LEN], len);
+    le_write16(&out[OFS_SEQ], frame->seq);
+    le_write16(&out[OFS_LEN], len);
     if (len > 0U) {
         (void)memcpy(&out[OFS_PAYLOAD], frame->payload, len);
     }
-    write_le16(&out[OFS_PAYLOAD + len],
+    le_write16(&out[OFS_PAYLOAD + len],
                crc16_compute(&out[OFS_TYPE], (size_t)HEADER_LEN + len));
     return total;
 }
