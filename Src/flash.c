@@ -32,6 +32,10 @@ const uint8_t *flash_spare_image(void) {
     return (const uint8_t *)FLASH_SPARE_BASE;
 }
 
+const uint32_t *flash_spare_words(void) {
+    return (const uint32_t *)FLASH_SPARE_BASE;
+}
+
 static void wait_while_busy(void) {
     while ((FLASH_SR & FLASH_SR_BSY) != 0U) {
     }

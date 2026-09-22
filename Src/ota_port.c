@@ -67,9 +67,9 @@ static ota_io_t program(void *ctx, uint32_t offset, const uint8_t *bytes,
  */
 static uint32_t image_crc32(void *ctx, uint32_t size) {
     (void)ctx;
-    const uint8_t *image = flash_spare_image();
-    return (crc_unit_is_trustworthy() != 0U) ? crc_unit_compute(image, size)
-                                             : crc32_compute(image, size);
+    return (crc_unit_is_trustworthy() != 0U)
+               ? crc_unit_compute_words(flash_spare_words(), size)
+               : crc32_compute(flash_spare_image(), size);
 }
 
 /// Piece 7 switches banks through BFB2. Until then, never.

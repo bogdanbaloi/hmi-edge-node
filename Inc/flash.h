@@ -22,9 +22,9 @@
  */
 
 /// One flash bank of the STM32L476RG: 512 KB (RM0351, dual bank mode).
-#define FLASH_BANK_BYTES (512U * 1024U)
+#define FLASH_BANK_BYTES (512UL * 1024UL)
 /// One flash page, the smallest erasable unit: 2 KB.
-#define FLASH_PAGE_BYTES (2U * 1024U)
+#define FLASH_PAGE_BYTES (2UL * 1024UL)
 /// The bank the CPU runs from is mapped here, whichever one it is.
 #define FLASH_RUNNING_BASE 0x08000000UL
 /// The other bank is seen here, right after it.
@@ -71,6 +71,11 @@ flash_bank_t flash_spare_bank(void);
 /// COMMIT). Read only: writing through this pointer does nothing, flash is
 /// written through the controller.
 const uint8_t *flash_spare_image(void);
+
+/// The same memory seen as words. A bank starts on a bank boundary, so it is
+/// word aligned, and the alignment lives HERE, in the one place that knows the
+/// address, instead of being re-derived from a byte pointer by a cast.
+const uint32_t *flash_spare_words(void);
 
 /**
  * @brief Erase the whole spare bank, one mass erase (RM0351 section 3.3.6).

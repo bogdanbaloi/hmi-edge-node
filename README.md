@@ -430,6 +430,19 @@ tests can be widened by accident.
 The docs job enforces the rule that every new piece carries a diagram validated
 with `plantuml -checkonly`, so the discipline is checked rather than remembered.
 
+### The local lint gate is not the CI lint gate
+
+Same `clang-tidy`, same config, different answer, and it cost a red CI run.
+`bugprone-implicit-widening-of-multiplication-result` caught `512U * 1024U`
+being widened to an `unsigned long` address in `flash.h`. On Windows
+`unsigned long` is 32 bits, so nothing widens and the check stays silent; on
+the Ubuntu runner it is 64 bits, so it fires. The rule that follows: a
+constant that takes part in an address is written `UL`, and a green local lint
+is evidence, not proof. Running the local lint with a Linux target does catch
+it, and was checked against a deliberate mutant, but the files that include
+`string.h` or `stdio.h` then fail to parse with the MinGW headers, so CI stays
+the authority.
+
 ### Static analysis, and what it is not
 
 `clang-tidy` runs with `WarningsAsErrors`, so the first finding turns the build
