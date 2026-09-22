@@ -27,7 +27,7 @@ $request  = [byte[]](0xA5, 0x01, 0x01, 0x00, 0x00, 0x00, 0xE9, 0xCD)
 $expected = [byte[]](0xA5, 0x81, 0x01, 0x00, 0x06, 0x00,
                      0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0xF3, 0x1C)
 
-function Format-Hex([byte[]]$Bytes) {
+function ConvertTo-HexText([byte[]]$Bytes) {
     ($Bytes | ForEach-Object { $_.ToString("X2") }) -join " "
 }
 
@@ -54,7 +54,7 @@ try {
 
 try {
     $serial.DiscardInBuffer()
-    Write-Host ("sent     " + (Format-Hex $request))
+    Write-Host ("sent     " + (ConvertTo-HexText $request))
     $serial.Write($request, 0, $request.Length)
 
     $received = New-Object System.Collections.Generic.List[byte]
@@ -69,14 +69,14 @@ try {
         Write-Host "received nothing in $WaitMs ms" -ForegroundColor Red
         exit 1
     }
-    Write-Host ("received " + (Format-Hex $bytes))
+    Write-Host ("received " + (ConvertTo-HexText $bytes))
 
     if ((Find-Bytes $bytes $expected) -ge 0) {
         Write-Host "OK: the exact INFO expected: version 1, bank 1, CONFIRMED" -ForegroundColor Green
         exit 0
     }
     Write-Host "NOT the expected INFO. Compare with:" -ForegroundColor Yellow
-    Write-Host ("expected " + (Format-Hex $expected))
+    Write-Host ("expected " + (ConvertTo-HexText $expected))
     exit 1
 } finally {
     $serial.Close()

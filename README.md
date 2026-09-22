@@ -532,12 +532,18 @@ powershell -ExecutionPolicy Bypass -File ota-info.ps1
 The request is the worked example from section 3 of the spec, byte for byte,
 so the board is checked against the spec and not against this repo's own
 encoder. The expected answer is `INFO`: version 1, bank 1, `CONFIRMED`.
-What the script expects, not yet a capture from the board:
+A real capture from the board, 2026-09-22:
 
 ```
 sent     A5 01 01 00 00 00 E9 CD
 received A5 81 01 00 06 00 01 00 00 00 01 00 F3 1C
+OK: the exact INFO expected: version 1, bank 1, CONFIRMED
 ```
+
+The same day, two more answers checked on the board against bytes built by
+the encoder: a `BEGIN` got `A5 83 02 00 01 00 05 C6 37`, which is
+`NAK FLASH_ERROR`, because nothing writes flash yet; and a frame with a broken
+checksum, sent outside a session, got no answer at all, as section 6 says.
 
 ## Docs
 
