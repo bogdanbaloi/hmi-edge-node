@@ -27,7 +27,7 @@
  */
 
 #include "crc16.h"
-#include "ota_frame.h"
+#include "ota_frame_parser.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -66,16 +66,17 @@ typedef struct {
 static capture_t g_cap;
 
 /// Copies each frame, because its payload is only valid during the call.
-static void capture_sink(const ota_frame_t *frame, void *ctx) {
+static void capture_sink(const ota_frame_t *frame, ota_frame_status_t status,
+                         void *ctx) {
     capture_t *cap = (capture_t *)ctx;
-    if (frame->status == OTA_FRAME_OK) {
+    if (status == OTA_FRAME_OK) {
         cap->ok++;
     } else {
         cap->bad_crc++;
     }
     if (cap->count < CAPTURE_MAX) {
         const unsigned i = cap->count;
-        cap->status[i] = frame->status;
+        cap->status[i] = status;
         cap->type[i] = frame->type;
         cap->seq[i] = frame->seq;
         cap->len[i] = frame->len;
@@ -100,10 +101,10 @@ static unsigned last(void) {
 /// Fresh parser and capture, then every byte fed one at a time.
 static void feed_all(const uint8_t *bytes, size_t n) {
     ota_frame_parser_t parser;
-    ota_frame_init(&parser);
+    ota_frame_parser_init(&parser);
     (void)memset(&g_cap, 0, sizeof g_cap);
     for (size_t i = 0U; i < n; i++) {
-        ota_frame_feed(&parser, bytes[i], capture_sink, &g_cap);
+        ota_frame_parser_feed(&parser, bytes[i], capture_sink, &g_cap);
     }
 }
 
@@ -173,7 +174,6 @@ static const uint8_t k_spec_ack[] = {0xA5, 0x82, 0x01, 0x00,
 static ota_frame_t msg(uint8_t type, uint16_t seq, const uint8_t *payload,
                        uint16_t len) {
     ota_frame_t m;
-    m.status = OTA_FRAME_OK;  /* ignored by the encoder */
     m.type = type;
     m.seq = seq;
     m.len = len;
@@ -257,14 +257,14 @@ static void parses_the_spec_worked_examples(void) {
 /// Nothing is handed over before the last byte, and exactly once after it.
 static void a_frame_is_delivered_only_when_complete(void) {
     ota_frame_parser_t parser;
-    ota_frame_init(&parser);
+    ota_frame_parser_init(&parser);
     (void)memset(&g_cap, 0, sizeof g_cap);
     const size_t last_byte = sizeof k_spec_info_req - 1U;
     for (size_t i = 0U; i < last_byte; i++) {
-        ota_frame_feed(&parser, k_spec_info_req[i], capture_sink, &g_cap);
+        ota_frame_parser_feed(&parser, k_spec_info_req[i], capture_sink, &g_cap);
     }
     CHECK(g_cap.count == 0U);
-    ota_frame_feed(&parser, k_spec_info_req[last_byte], capture_sink, &g_cap);
+    ota_frame_parser_feed(&parser, k_spec_info_req[last_byte], capture_sink, &g_cap);
     CHECK(g_cap.count == 1U);
 }
 

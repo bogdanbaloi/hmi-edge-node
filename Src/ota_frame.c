@@ -2,6 +2,11 @@
  * @file ota_frame.c
  * @brief Envelope of the UART flash protocol: byte-by-byte parser and encoder.
  *
+ * One file implements two headers, ota_frame.h and ota_frame_parser.h. The
+ * split is for the clients, so a sender never depends on the parser. Both
+ * halves read and write the same layout, the offsets below, and that layout
+ * is one reason to change, so they stay in one translation unit.
+ *
  * The resync rule is the part that shaped this file. On a false start the
  * parser must go back over bytes it has already taken in, because a real frame
  * can sit inside a false frame's body. That is why the parser keeps the raw
@@ -15,6 +20,7 @@
  */
 
 #include "ota_frame.h"
+#include "ota_frame_parser.h"
 
 #include <string.h>
 
@@ -78,16 +84,17 @@ static ota_frame_status_t deliver(const ota_frame_parser_t *parser,
     const uint16_t sent = read_le16(&parser->raw[OFS_PAYLOAD + len]);
     const uint16_t computed =
         crc16_compute(&parser->raw[OFS_TYPE], (size_t)HEADER_LEN + len);
+    const ota_frame_status_t status =
+        (computed == sent) ? OTA_FRAME_OK : OTA_FRAME_BAD_CRC;
     ota_frame_t frame;
-    frame.status = (computed == sent) ? OTA_FRAME_OK : OTA_FRAME_BAD_CRC;
     frame.type = parser->raw[OFS_TYPE];
     frame.seq = read_le16(&parser->raw[OFS_SEQ]);
     frame.len = len;
     frame.payload = &parser->raw[OFS_PAYLOAD];
     if (sink != NULL) {
-        sink(&frame, ctx);
+        sink(&frame, status, ctx);
     }
-    return frame.status;
+    return status;
 }
 
 /// Runs the candidate forward as far as the bytes already held allow.
@@ -116,12 +123,12 @@ static void process(ota_frame_parser_t *parser, ota_frame_sink_t sink,
     }
 }
 
-void ota_frame_init(ota_frame_parser_t *parser) {
+void ota_frame_parser_init(ota_frame_parser_t *parser) {
     parser->count = 0U;
 }
 
-void ota_frame_feed(ota_frame_parser_t *parser, uint8_t byte,
-                    ota_frame_sink_t sink, void *ctx) {
+void ota_frame_parser_feed(ota_frame_parser_t *parser, uint8_t byte,
+                           ota_frame_sink_t sink, void *ctx) {
     if (parser->count == 0U && byte != OTA_FRAME_START) {
         return;  /* idle: not a frame, drop it */
     }

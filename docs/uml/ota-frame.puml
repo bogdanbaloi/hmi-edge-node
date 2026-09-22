@@ -1,7 +1,7 @@
 @startuml ota-frame
 ' The UART flash protocol envelope: how one received byte is handled.
-' Grounded in Src/ota_frame.c (ota_frame_feed, process, seek_start) and in
-' industrial-hmi docs/protocols/uart-flash-v1.md, sections 3 and 9 item 8.
+' Grounded in Src/ota_frame.c (ota_frame_parser_feed, process, seek_start)
+' and in industrial-hmi docs/protocols/uart-flash-v1.md, sections 3 and 9 item 8.
 
 title One byte in: the frame parser and the resync rule
 

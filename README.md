@@ -273,6 +273,14 @@ industrial-hmi (status AGREED, 2026-09-22). This binary tests the envelope,
 `Src/ota_frame.c`, and it is a contract test in the same shape as the telemetry
 one: its anchors are copied verbatim from the spec, not derived from this code.
 
+The module has two headers on purpose. `ota_frame.h` holds the frame layout
+and the encoder, which is all a sender needs. `ota_frame_parser.h` holds the
+parser. Code that only transmits, like the ACK and NAK path, includes the first
+alone and cannot even name the parser: a file that tries fails to compile,
+checked once by hand. The parser's verdict on a frame, good or bad checksum,
+travels beside the frame to the sink instead of inside it, so a sender is not
+handed a field it would have to ignore.
+
 | Anchor, from the spec | Why it is enough |
 | --- | --- |
 | CRC-16/CCITT-FALSE over `123456789` is `0x29B1` | several CRC-16s share the polynomial, and only the right one gives this |
@@ -291,17 +299,19 @@ skips `LEN` bytes, because a garbage `LEN` can reach 65535 and swallow the real
 frames behind it. One test hides a real frame inside a false frame's body and
 checks it still comes out.
 
-Six mutants, each a realistic mistake, are each caught by a named test:
+Eight mutants, each a realistic mistake, are each caught by a named test:
 checksum over the start byte, checksum read big-endian, skipping `LEN` after a
 bad checksum, the length limit off by one, throwing a false start away whole
-instead of resuming after it, and not skipping leftovers after a frame. The
-mutation run also caught a bug in the test itself: one assertion read the last
-captured frame at index `count - 1` with `count` at zero, the binary crashed,
-the crash threw away the buffered failure lines, and a killed mutant was first
-reported as surviving. `docs/uml/ota-frame.puml` has the parser's flow.
+instead of resuming after it, not skipping leftovers after a frame, resuming
+two bytes after a false start instead of one, and the checksum verdict
+inverted. The mutation run also caught a bug in the test itself: one
+assertion read the last captured frame at index `count - 1` with `count` at
+zero, the binary crashed, the crash threw away the buffered failure lines, and
+a killed mutant was first reported as surviving. `docs/uml/ota-frame.puml` has
+the parser's flow.
 
-On the board the two modules cost 518 bytes of code (64 for the CRC, 454 for
-the parser), and the linked image grew by 600. No RAM yet: nothing on the
+On the board the two modules cost 510 bytes of code (64 for the CRC, 446 for
+the parser), and the linked image grew by 592. No RAM yet: nothing on the
 board creates a parser so far. One will take 270 bytes, a whole frame kept
 raw, because the resync rule needs the bytes back.
 

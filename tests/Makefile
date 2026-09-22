@@ -39,7 +39,8 @@ fault_test: $(FAULT_SRC) ../Inc/fault.h
 
 # The UART flash protocol envelope. Pure logic, like telemetry, so the whole
 # parser runs here: the anchors are copied from industrial-hmi's agreed spec.
-ota_frame_test: $(OTA_SRC) ../Inc/ota_frame.h ../Inc/crc16.h
+ota_frame_test: $(OTA_SRC) ../Inc/ota_frame.h ../Inc/ota_frame_parser.h \
+                ../Inc/crc16.h
 	$(CC) $(CFLAGS) -o $@ $(OTA_SRC)
 
 run: $(TARGETS)
