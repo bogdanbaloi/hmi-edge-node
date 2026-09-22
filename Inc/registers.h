@@ -21,14 +21,35 @@
 /* Peripherals are clock-gated off at reset; we must enable each port/UART. */
 #define RCC_AHB2ENR            REG32(0x4002104CUL) /* GPIO port clocks       */
 #define RCC_APB1ENR1           REG32(0x40021058UL) /* USART2 clock (on APB1) */
+#define RCC_APB2ENR            REG32(0x40021060UL) /* SYSCFG clock (on APB2) */
 #define RCC_AHB2ENR_GPIOAEN    (1UL << 0)          /* enable GPIOA clock     */
 #define RCC_AHB2ENR_GPIOCEN    (1UL << 2)          /* enable GPIOC clock     */
 #define RCC_APB1ENR1_USART2EN  (1UL << 17)         /* enable USART2 clock    */
+#define RCC_APB2ENR_SYSCFGEN   (1UL << 0)          /* enable SYSCFG clock    */
 
-/* ---- GPIOA @ 0x48000000  (PA2 = USART2_TX AF7, PA5 = LED LD2) ---------- */
+/* ---- GPIOA @ 0x48000000  (PA2/PA3 = USART2 TX/RX AF7, PA5 = LED LD2) --- */
 #define GPIOA_MODER            REG32(0x48000000UL) /* pin mode, 2 bits/pin   */
 #define GPIOA_ODR              REG32(0x48000014UL) /* output data            */
 #define GPIOA_AFRL             REG32(0x48000020UL) /* alt function, pins 0-7 */
+
+/* ---- GPIO fields, the same layout on every port (RM0351 GPIO chapter) ---
+ * MODER and PUPDR give each pin 2 bits, AFRL gives pins 0 to 7 4 bits each.
+ * Each macro places a value in one pin's field; the _MASK forms cover the
+ * whole field, for clearing it first. */
+#define GPIO_FIELD2_BITS       2U                  /* MODER, PUPDR           */
+#define GPIO_FIELD4_BITS       4U                  /* AFRL                   */
+#define GPIO_FIELD2_ALL        3U                  /* every bit of a 2-bit field */
+#define GPIO_FIELD4_ALL        0xFU                /* every bit of a 4-bit field */
+#define GPIO_MODE(pin, mode)   ((uint32_t)(mode) << (GPIO_FIELD2_BITS * (pin)))
+#define GPIO_MODE_MASK(pin)    GPIO_MODE(pin, GPIO_FIELD2_ALL)
+#define GPIO_PULL(pin, pull)   ((uint32_t)(pull) << (GPIO_FIELD2_BITS * (pin)))
+#define GPIO_PULL_MASK(pin)    GPIO_PULL(pin, GPIO_FIELD2_ALL)
+#define GPIO_AF(pin, af)       ((uint32_t)(af) << (GPIO_FIELD4_BITS * (pin)))
+#define GPIO_AF_MASK(pin)      GPIO_AF(pin, GPIO_FIELD4_ALL)
+#define GPIO_MODE_OUTPUT       1U                  /* general-purpose output */
+#define GPIO_MODE_ALTERNATE    2U                  /* a peripheral drives it */
+#define GPIO_PULL_UP           1U
+#define GPIO_AF7_USART         7U  /* USART1-3 on AF7, DS10198 Table 17 */
 
 /* ---- GPIOC @ 0x48000800  (PC13 = USER button B1) ---------------------- */
 #define GPIOC_MODER            REG32(0x48000800UL) /* pin mode, 2 bits/pin   */
@@ -39,10 +60,22 @@
 #define USART2_CR1             REG32(0x40004400UL) /* control register 1     */
 #define USART2_BRR             REG32(0x4000440CUL) /* baud rate register     */
 #define USART2_ISR             REG32(0x4000441CUL) /* status register        */
+#define USART2_ICR             REG32(0x40004420UL) /* interrupt flag clear   */
+#define USART2_RDR             REG32(0x40004424UL) /* receive data register  */
 #define USART2_TDR             REG32(0x40004428UL) /* transmit data register */
 #define USART2_CR1_UE          (1UL << 0)          /* USART enable           */
+#define USART2_CR1_RE          (1UL << 2)          /* receiver enable        */
 #define USART2_CR1_TE          (1UL << 3)          /* transmitter enable     */
+#define USART2_CR1_RXNEIE      (1UL << 5)          /* interrupt on RX / ORE  */
+#define USART2_ISR_PE          (1UL << 0)          /* parity error           */
+#define USART2_ISR_FE          (1UL << 1)          /* framing error          */
+#define USART2_ISR_NF          (1UL << 2)          /* noise detected         */
+#define USART2_ISR_ORE         (1UL << 3)          /* overrun: a byte lost   */
+#define USART2_ISR_RXNE        (1UL << 5)          /* a received byte waits  */
 #define USART2_ISR_TXE         (1UL << 7)          /* TX data register empty */
+/* ICR bits sit at the same positions as the ISR flags they clear. */
+#define USART2_ICR_ERRORS      (USART2_ISR_PE | USART2_ISR_FE | USART2_ISR_NF | \
+                                USART2_ISR_ORE)
 
 /* ---- ADC1 @ 0x50040000, common regs @ 0x50040300 (internal temp sensor) - */
 #define ADC1_ISR               REG32(0x50040000UL) /* status: ADRDY, EOC     */
@@ -78,9 +111,10 @@
 
 /* ---- SysTick: the core's 24-bit down counter (Cortex-M, not STM32) -------
  * Counts down from RELOAD to zero at the core clock, then reloads and sets
- * COUNTFLAG. Polled here rather than using its interrupt: this firmware has no
- * interrupts enabled at all, and a millisecond tick read from the main loop is
- * enough. Addresses from the ARMv7-M Architecture Reference Manual. */
+ * COUNTFLAG. Polled here rather than using its interrupt: a millisecond tick
+ * read from the main loop is enough. The one interrupt this firmware enables
+ * is the UART receive, which cannot be polled, see uart.c.
+ * Addresses from the ARMv7-M Architecture Reference Manual. */
 #define SYST_CSR               REG32(0xE000E010UL) /* control and status      */
 #define SYST_RVR               REG32(0xE000E014UL) /* reload value            */
 #define SYST_CVR               REG32(0xE000E018UL) /* current value           */
@@ -109,8 +143,24 @@
 /* CP10 and CP11, full access, 0b11 each at bits [21:20] and [23:22]. */
 #define SCB_CPACR_FPU_FULL     (0xFUL << 20)
 
+/* ---- SYSCFG @ 0x40010000 ----------------------------------------------
+ * MEMRMP.FB_MODE says which flash bank is mapped at 0x08000000, the one the
+ * CPU runs from: 0 = bank 1, 1 = bank 2. Set by the boot code from the BFB2
+ * option bit, so it is how a running image learns which bank it is in. */
+#define SYSCFG_MEMRMP          REG32(0x40010000UL) /* memory remap           */
+#define SYSCFG_MEMRMP_FB_MODE  (1UL << 8)          /* 1 = bank 2 at 0x0800.. */
+
+/* ---- NVIC: interrupt enables (Cortex-M4 core, ARMv7-M ARM) --------------
+ * One bit per interrupt, 32 per register, so interrupt n is bit n % 32 of
+ * ISER[n / 32]. Writing a 0 changes nothing, so no read-modify-write. */
+#define NVIC_ISER(n)           REG32(0xE000E100UL + (4UL * ((n) / 32U)))
+#define NVIC_ISER_BIT(n)       (1UL << ((n) % 32U))
+/* Interrupt numbers, from the vector table in the startup file and ST's SVD. */
+#define IRQ_USART2             38U
+
 /* Pin numbers within their ports. */
 #define PIN_USART2_TX  2U   /* PA2  */
+#define PIN_USART2_RX  3U   /* PA3  */
 #define PIN_LED        5U   /* PA5  */
 #define PIN_BUTTON     13U  /* PC13 */
 

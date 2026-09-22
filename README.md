@@ -69,9 +69,10 @@ on a host PC:
 
 | Layer | Files | Job |
 | --- | --- | --- |
-| HAL / BSP | `core`, `board`, `uart`, `adc`, `registers.h` | the only code that touches registers |
-| App | `telemetry`, `temperature` | pure logic: a button edge -> the frames, and counts -> degrees |
-| Composition | `main.c` | wires the HAL to the app and runs the loop |
+| HAL / BSP | `core`, `board`, `uart`, `adc`, `flash`, `registers.h` | the only code that touches registers |
+| App | `telemetry`, `temperature`, `ota_frame`, `ota_update` | pure logic: a button edge -> the frames, counts -> degrees, bytes -> update messages -> answers |
+| Utility | `byte_ring`, `crc16`, `le_bytes.h` | pure building blocks with no dependency, used by either layer: `uart` queues received bytes in `byte_ring` |
+| Composition | `main.c`, `ota_port` | wires the HAL to the app and runs the loop |
 
 `telemetry` depends on injected function pointers (a temperature reader and a
 line sink), so a host test drives it with a fake reader and a capturing sink.
@@ -209,8 +210,8 @@ mingw32-make -C tests run
 ```
 
 No board, no test framework, no dependency on the other repo. It compiles the
-pure-logic sources with the desktop compiler already on PATH. Five binaries,
-five different questions:
+pure-logic sources with the desktop compiler already on PATH. Six binaries,
+six different questions:
 
 ### `contract_frame_test`: does the wire format still match?
 
@@ -359,6 +360,57 @@ overwrote the memory it was meant to check.
 On the board the state machine costs 1042 bytes of code and 52 bytes of RAM.
 `docs/uml/ota-update.puml` has the states.
 
+### `byte_ring_test`: does a received byte survive the trip to the main loop?
+
+The third OTA piece makes the board listen. Until now it only talked: USART2
+had its transmitter on and its receiver off, and `PA3`, the receive pin, was
+not connected to it.
+
+Receiving is the one place this firmware uses an interrupt. The USART holds
+exactly one received byte, and at 115200 baud the next one overwrites it
+87 us later. The main loop cannot promise to be back that soon: a single
+telemetry line keeps it busy for about 2.7 ms. So `USART2_IRQHandler` moves
+each byte into a queue, `byte_ring`, and the loop takes them out whenever it
+gets there and feeds them to the frame parser, which hands whole frames to the
+state machine. Sending stays a plain blocking loop, because nothing on that
+side has a deadline. `docs/uml/ota-uart-rx.puml` follows one `INFO_REQ` from
+the wire to the answer.
+
+The queue needs no interrupt masking, because it has exactly one writer and
+one reader and each writes only its own index. The storage is `volatile` too,
+so the compiler cannot publish an index before the byte it stands for. That
+ordering is argued in `byte_ring.h`; a PC cannot race an interrupt, so the test
+checks the arithmetic the argument rests on: order, full and empty, the indices
+crossing 2^32, and the largest frame fitting whole. When the queue is full the
+NEW byte is dropped, never the oldest: overwriting would corrupt a frame
+already half read, while a dropped byte leaves a gap the frame CRC catches.
+
+Nine mutants, each caught. One of them first did not apply, and the harness
+said so instead of counting it as caught.
+
+Two things the lint gate found on the way. `USART2_IRQHandler` failed the
+naming rule: the exception meant for the vector names was `.*_Handler`, and ST
+writes interrupts with no underscore before `Handler`. So the rule had covered
+the faults all along and never an interrupt. It is now `.*_(IRQ)?Handler`, and
+three misnamed functions still fail it. And the board file still had bare
+numbers for the GPIO fields, `7` for the USART alternate function, `3` for a
+mode mask; they have names now, and the binary shows the same stores in the
+same order, `AFRL` before `MODER`.
+
+What the board can do after this piece: answer `INFO_REQ` for real, with its
+version and the bank it runs from, read from `SYSCFG` by the `flash` driver.
+The port that joins the drivers to the state machine, `ota_port`, sits in the
+composition layer and touches no register: the first draft put it in the HAL,
+where it included the state machine's types, the same inversion the `adc`
+section above rules out, and the layering check before the commit caught it.
+What it refuses:
+everything that writes flash. Erasing, programming, switching banks and
+confirming answer failure until pieces 5 to 7, so `BEGIN` gets
+`NAK FLASH_ERROR`. A board that claimed an update worked when nothing was
+written would be worse than one that says it cannot yet. Receiving costs 476
+bytes of code and 840 of RAM, most of it the 512-byte queue and the parser's
+frame buffer.
+
 ## CI
 
 Every push and every pull request runs four jobs, none of which needs a board:
@@ -402,6 +454,7 @@ each one **cannot** catch.
 | Pin | Role |
 | --- | --- |
 | PA2 | USART2_TX (AF7), wired to the ST-Link virtual COM port |
+| PA3 | USART2_RX (AF7), from the ST-Link virtual COM port; its only interrupt |
 | PA5 | LED LD2 (output) |
 | PC13 | USER button B1 (input, internal pull-up; low when pressed) |
 | ADC1 ch17 | internal temperature sensor |
@@ -472,6 +525,32 @@ said 35 resets, from one session never read and one count made by eye. A
 line count then said 43, because `[FF FF FF]` holds three bytes on one line.
 The logs held 46.
 
+## Ask the board what it runs
+
+`ota-info.ps1` sends one `INFO_REQ` and shows every byte that comes back. It
+is the first proof that the board receives. Close the serial monitor first,
+since a COM port has one owner at a time.
+
+```
+powershell -ExecutionPolicy Bypass -File ota-info.ps1
+```
+
+The request is the worked example from section 3 of the spec, byte for byte,
+so the board is checked against the spec and not against this repo's own
+encoder. The expected answer is `INFO`: version 1, bank 1, `CONFIRMED`.
+A real capture from the board, 2026-09-22:
+
+```
+sent     A5 01 01 00 00 00 E9 CD
+received A5 81 01 00 06 00 01 00 00 00 01 00 F3 1C
+OK: the exact INFO expected: version 1, bank 1, CONFIRMED
+```
+
+The same day, two more answers checked on the board against bytes built by
+the encoder: a `BEGIN` got `A5 83 02 00 01 00 05 C6 37`, which is
+`NAK FLASH_ERROR`, because nothing writes flash yet; and a frame with a broken
+checksum, sent outside a session, got no answer at all, as section 6 says.
+
 ## Docs
 
 - API reference: `doxygen docs/Doxyfile` (output in `build/doxygen/html`).
@@ -487,3 +566,4 @@ The logs held 46.
 - UART pin order (one 0xFF per reset, and the two-line fix): `docs/uml/uart-pin-order.puml`.
 - OTA frame parser (one byte in, the resync rule): `docs/uml/ota-frame.puml`.
 - OTA update state machine (the session, and what each message may do): `docs/uml/ota-update.puml`.
+- OTA receive path (one frame from the wire through the interrupt to the answer): `docs/uml/ota-uart-rx.puml`.
