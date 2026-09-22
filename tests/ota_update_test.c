@@ -1,6 +1,6 @@
 /**
  * @file ota_update_test.c
- * @brief The update state machine, driven end to end on a PC.
+ * @brief The update state machine, tested end to end on a PC.
  *
  * The test plays the host agent. Every message is built with the real
  * encoder, pushed byte by byte through the real parser into the state
@@ -14,8 +14,8 @@
  *
  * Every rule checked here is from industrial-hmi `uart-flash-v1.md`,
  * sections 4 to 6 (status AGREED), including the CRC32 variant and the
- * silence timeout pinned on 2026-09-22. One code is not in the spec yet:
- * NAK BAD_MESSAGE, proposed to industrial-hmi on the board.
+ * silence timeout pinned on 2026-09-22, and NAK BAD_MESSAGE, added to the
+ * spec the same day at firmware's request.
  *
  * Build and run: `mingw32-make -C tests run` (see tests/Makefile).
  */

@@ -43,7 +43,7 @@ note bottom of RECEIVING
 end note
 
 legend bottom
-  Behind the port, so all of this runs on a PC: the flash is a RAM array,
+  Behind the port, so this logic is tested on a PC first: the flash is a RAM array,
   the clock a variable, the UART a capture buffer. 73 checks, 15 mutants.
   The silence counts from the board's LAST ANSWER, not from the last frame:
   the erase at BEGIN is the board's own work and must not count against

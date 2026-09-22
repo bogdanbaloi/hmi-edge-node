@@ -19,7 +19,8 @@
  * Pure logic, like telemetry. Everything that only exists on the board is
  * injected through ::ota_update_port_t: the flash, the bank, the clock, the
  * UART. On the board those are the real drivers; in the host test they are a
- * RAM array, a counter and a capture buffer, so every rule runs on a PC first.
+ * RAM array, a counter and a capture buffer, so every rule is tested on a PC
+ * before it reaches the board.
  *
  * It plugs straight into the parser: ::ota_update_on_frame has the exact shape
  * of ::ota_frame_sink_t, so the parser hands frames to it with no adapter.
@@ -46,10 +47,11 @@
 #define OTA_NAK_FLASH_ERROR   0x05U  ///< Erasing or programming failed.
 #define OTA_NAK_VERIFY_FAILED 0x06U  ///< CRC32 at COMMIT does not match BEGIN.
 /**
- * PROPOSED to industrial-hmi on the board, not yet in the spec: the message
+ * Added to the spec on 2026-09-22 at firmware's request (AGREED): the message
  * is malformed, an unknown TYPE, or a payload whose length or value cannot
  * belong to it. The spec has no code for that, and borrowing BAD_STATE or
- * BAD_OFFSET would tell the host something false.
+ * BAD_OFFSET would tell the host something false. The host treats it as a
+ * bug to report, never as a reason to resend.
  */
 #define OTA_NAK_BAD_MESSAGE   0x07U
 

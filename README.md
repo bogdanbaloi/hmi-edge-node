@@ -325,7 +325,8 @@ after `BEGIN`, offsets that follow on exactly, a size that fits, `COMMIT` only
 once every byte is in and the image CRC32 matches, `ABORT` leaving the running
 image alone, and a session that ends after 10 s of silence.
 
-It runs entirely on a PC because everything that exists only on the board sits
+Its logic is tested completely on a PC, before it reaches the board. That works
+because everything that exists only on the board sits
 behind a port of function pointers, the same way `telemetry` takes its reader
 and its sink. In the test the inactive bank is a RAM array, the clock is a
 variable moved by hand, and the UART is a capture buffer. The test also plays
