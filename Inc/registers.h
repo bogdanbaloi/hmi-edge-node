@@ -16,6 +16,10 @@
 /* A 32-bit memory-mapped register at a fixed address. `volatile` so the
  * compiler never caches or reorders these hardware accesses. */
 #define REG32(addr) (*(volatile uint32_t *)(addr))
+/* An 8-bit view of a register, for peripherals where the ACCESS SIZE is part
+ * of the meaning: writing one byte to the CRC data register feeds one byte,
+ * writing four feeds four. */
+#define REG8(addr) (*(volatile uint8_t *)(addr))
 
 /* ---- RCC: Reset and Clock Control @ 0x40021000 ------------------------- */
 /* Peripherals are clock-gated off at reset; we must enable each port/UART. */
@@ -142,6 +146,20 @@
 #define SCB_CPACR              REG32(0xE000ED88UL) /* coprocessor access      */
 /* CP10 and CP11, full access, 0b11 each at bits [21:20] and [23:22]. */
 #define SCB_CPACR_FPU_FULL     (0xFUL << 20)
+
+/* ---- CRC calculation unit @ 0x40023000 (RM0351 Rev 9, section 15) ------
+ * Its reset values are already the CRC-32 polynomial 0x04C11DB7 and the
+ * initial value 0xFFFFFFFF, so only the bit reversals have to be set. The
+ * final XOR is not in the hardware and is done in software. */
+#define RCC_AHB1ENR            REG32(0x40021048UL) /* CRC unit clock         */
+#define RCC_AHB1ENR_CRCEN      (1UL << 12)         /* enable the CRC clock   */
+#define CRC_DR                 REG32(0x40023000UL) /* feed data here         */
+#define CRC_DR_BYTE            REG8(0x40023000UL)  /* ... one byte at a time */
+#define CRC_CR                 REG32(0x40023008UL) /* reversals and reset    */
+#define CRC_CR_RESET           (1UL << 0)          /* back to the init value */
+#define CRC_CR_REV_IN_BYTE     (1UL << 5)          /* 01: reverse each byte  */
+#define CRC_CR_REV_IN_WORD     (3UL << 5)          /* 11: reverse each word  */
+#define CRC_CR_REV_OUT         (1UL << 7)          /* reverse the result     */
 
 /* ---- FLASH controller @ 0x40022000 (RM0351 Rev 9, section 3.7) ---------
  * Only what erasing and programming the OTHER bank needs. The option byte

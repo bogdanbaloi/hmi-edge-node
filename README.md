@@ -69,7 +69,7 @@ on a host PC:
 
 | Layer | Files | Job |
 | --- | --- | --- |
-| HAL / BSP | `core`, `board`, `uart`, `adc`, `flash`, `registers.h` | the only code that touches registers |
+| HAL / BSP | `core`, `board`, `uart`, `adc`, `flash`, `crc_unit`, `registers.h` | the only code that touches registers |
 | App | `telemetry`, `temperature`, `ota_frame`, `ota_update` | pure logic: a button edge -> the frames, counts -> degrees, bytes -> update messages -> answers |
 | Utility | `byte_ring`, `crc16`, `crc32`, `le_bytes.h` | pure building blocks with no dependency, used by either layer: `uart` queues received bytes in `byte_ring` |
 | Composition | `main.c`, `ota_port` | wires the HAL to the app and runs the loop |
@@ -558,8 +558,16 @@ the properties the verify step rests on: a single flipped bit changes the
 answer, and erased `0xFF` padding behind an image is not part of it.
 
 It is a 256-entry table built once into RAM, not the bitwise form. Bitwise
-costs about 25 cycles per byte, so a full 510 KB image would take over 3 s at
-the 4 MHz reset clock, and the host allows 2 s for an answer.
+costs about 25 cycles per byte, and even the table was not enough: **measured
+on the board, verifying 64 KB took 572 ms**, so a full 510 KB image would take
+about 4.6 s, while the host allows 2 s for an answer to `COMMIT`.
+
+So the board uses the L4's CRC peripheral instead (`crc_unit`), and this
+software version stays for two jobs: it is the reference the host test anchors
+to the catalogue, and it is the fallback when the peripheral fails its own
+check. That check runs at start-up: the unit computes the CRC of `123456789`
+and must produce `0xCBF43926`. A misconfigured unit would otherwise fail every
+`COMMIT` on a perfectly good image, and blame the image.
 
 ### Writing the other bank
 

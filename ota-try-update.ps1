@@ -73,7 +73,9 @@ function New-Frame([int]$Type, [int]$Seq, [byte[]]$Payload) {
     $frame = New-Object System.Collections.Generic.List[byte]
     $frame.Add([byte]$FRAME_START)
     $frame.AddRange($body)
-    $frame.Add([byte](($crc -shr 8) -band 0xFF)); $frame.Add([byte]($crc -band 0xFF))
+    # Little-endian, like LEN and every other field: low byte first. The
+    # spec's worked example ends "E9 CD", which is the value 0xCDE9.
+    $frame.Add([byte]($crc -band 0xFF)); $frame.Add([byte](($crc -shr 8) -band 0xFF))
     return $frame.ToArray()
 }
 
@@ -81,15 +83,20 @@ function ConvertTo-HexText([byte[]]$Bytes) {
     ($Bytes | ForEach-Object { $_.ToString("X2") }) -join " "
 }
 
+# Every element is parenthesised: a comma binds tighter than -band, so
+# "$Value -band 0xFF, ..." would make the FIRST element an array.
 function Get-Le32([uint32]$Value) {
-    return [byte[]]@($Value -band 0xFF, ($Value -shr 8) -band 0xFF,
-                     ($Value -shr 16) -band 0xFF, ($Value -shr 24) -band 0xFF)
+    return [byte[]]@(($Value -band 0xFF),
+                     (($Value -shr 8) -band 0xFF),
+                     (($Value -shr 16) -band 0xFF),
+                     (($Value -shr 24) -band 0xFF))
 }
 
 # Reads the answer to one frame and says in words what came back.
 function Invoke-Exchange([System.IO.Ports.SerialPort]$Serial, [string]$What,
                          [byte[]]$Frame, [int]$Wait) {
     $Serial.DiscardInBuffer()
+    $clock = [System.Diagnostics.Stopwatch]::StartNew()
     $Serial.Write($Frame, 0, $Frame.Length)
     $got = New-Object System.Collections.Generic.List[byte]
     $end = (Get-Date).AddMilliseconds($Wait)
@@ -98,6 +105,7 @@ function Invoke-Exchange([System.IO.Ports.SerialPort]$Serial, [string]$What,
         if ($got.Count -ge 8) { break }
         Start-Sleep -Milliseconds 5
     }
+    $clock.Stop()
     $bytes = $got.ToArray()
     $answer = "nothing"
     if ($bytes.Length -ge 2 -and $bytes[0] -eq $FRAME_START) {
@@ -106,7 +114,11 @@ function Invoke-Exchange([System.IO.Ports.SerialPort]$Serial, [string]$What,
             $answer = "NAK " + $bytes[6].ToString("X2")
         }
     }
-    "{0,-22} {1,-10} {2}" -f $What, $answer, (ConvertTo-HexText $bytes)
+    # Write-Host, not bare output: anything written to the pipeline would be
+    # returned together with $answer, and the caller would compare an array.
+    # The time includes the frame on the wire, about 23 ms for a full DATA
+    # and under 1 ms for a COMMIT, so for COMMIT it is mostly the board.
+    Write-Host ("{0,-22} {1,-10} {2,6} ms  {3}" -f $What, $answer, $clock.ElapsedMilliseconds, (ConvertTo-HexText $bytes))
     return $answer
 }
 
@@ -145,9 +157,9 @@ try { $serial.Open() } catch {
 
 try {
     $payload = New-Object System.Collections.Generic.List[byte]
-    $payload.AddRange((Get-Le32 ([uint32]$ImageBytes)))
-    $payload.AddRange((Get-Le32 ([uint32]$crc32)))
-    $payload.AddRange((Get-Le32 ([uint32]2)))   # the new image's version
+    $payload.AddRange([byte[]](Get-Le32 ([uint32]$ImageBytes)))
+    $payload.AddRange([byte[]](Get-Le32 ([uint32]$crc32)))
+    $payload.AddRange([byte[]](Get-Le32 ([uint32]2)))   # the new image's version
     # BEGIN erases a whole bank before answering, so it gets the longest wait.
     $answer = Invoke-Exchange $serial "BEGIN" (New-Frame $MSG_BEGIN 1 $payload.ToArray()) ($WaitMs + 1000)
     if ($answer -ne "ACK") { Write-Host "BEGIN was refused, stopping." -ForegroundColor Red; exit 1 }
@@ -156,8 +168,8 @@ try {
     for ($offset = 0; $offset -lt $ImageBytes; $offset += $DATA_CHUNK) {
         $count = [Math]::Min($DATA_CHUNK, $ImageBytes - $offset)
         $chunk = New-Object System.Collections.Generic.List[byte]
-        $chunk.AddRange((Get-Le32 ([uint32]$offset)))
-        $chunk.AddRange($image[$offset..($offset + $count - 1)])
+        $chunk.AddRange([byte[]](Get-Le32 ([uint32]$offset)))
+        $chunk.AddRange([byte[]]($image[$offset..($offset + $count - 1)]))
         $answer = Invoke-Exchange $serial ("DATA at " + $offset) (New-Frame $MSG_DATA $seq $chunk.ToArray()) $WaitMs
         if ($answer -ne "ACK") { Write-Host "DATA was refused, stopping." -ForegroundColor Red; exit 1 }
         $seq++

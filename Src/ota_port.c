@@ -6,6 +6,7 @@
 #include "ota_port.h"
 #include "core.h"
 #include "crc32.h"
+#include "crc_unit.h"
 #include "flash.h"
 #include "uart.h"
 
@@ -55,11 +56,20 @@ static ota_io_t program(void *ctx, uint32_t offset, const uint8_t *bytes,
                                                                  : OTA_IO_FAILED;
 }
 
-/// Read back what is in the spare bank, rather than adding up what was sent:
-/// this is what catches a byte that never made it into flash.
+/**
+ * Read back what is in the spare bank, rather than adding up what was sent:
+ * this is what catches a byte that never made it into flash.
+ *
+ * The peripheral does it in a fraction of the time, measured: software took
+ * about 4.6 s for a full image and the host allows 2 s. The software version
+ * stays as the fallback for a unit that failed its own check at start-up,
+ * because a wrong CRC would fail every COMMIT on a good image.
+ */
 static uint32_t image_crc32(void *ctx, uint32_t size) {
     (void)ctx;
-    return crc32_compute(flash_spare_image(), size);
+    const uint8_t *image = flash_spare_image();
+    return (crc_unit_is_trustworthy() != 0U) ? crc_unit_compute(image, size)
+                                             : crc32_compute(image, size);
 }
 
 /// Piece 7 switches banks through BFB2. Until then, never.
