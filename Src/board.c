@@ -15,7 +15,7 @@ void board_init(void) {
        AFRL FIRST, MODER second. The other order put the pin into alternate
        function mode while AFRL still selected AF0, which is not the USART, for
        the few instructions in between, and every reset put exactly one 0xFF on
-       the line: 35 resets out of 35. With this order, 0 out of at least 6,
+       the line: 46 resets out of 46. With this order, 0 out of at least 6,
        measured on the board on 2026-09-22 with nothing else changed. The host
        used to receive that 0xFF glued to the front of the first frame after a
        reset. ST's own HAL (HAL_GPIO_Init) writes AFR before MODER. */

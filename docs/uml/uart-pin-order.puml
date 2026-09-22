@@ -29,7 +29,7 @@ note top of TX
   For the few instructions in between the pin is on AF0, not the
   UART, and the line drops. A short low pulse followed by high is
   read by the ST-Link as a start bit plus eight ones: 0xFF.
-  Measured: 35 resets, 35 bytes, all 0xFF.
+  Measured: 46 resets, 46 bytes, all 0xFF.
   The low pulse is inferred from the byte, not seen on a scope.
   That the ORDER causes it is proven by the before/after test.
 end note
