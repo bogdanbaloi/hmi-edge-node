@@ -80,6 +80,27 @@ jobs:
       - name: Size
         run: arm-none-eabi-size firmware.elf
 
+      # The linker script limits the image to one flash bank minus its
+      # CONFIRMED page, so an update can never overwrite the other bank or the
+      # record. A limit nobody tests can be widened by accident, so this links
+      # the firmware once more with tests/oversize_image.c, an array that fills
+      # the whole region, and expects the link to FAIL with the region
+      # overflowed. A success here means the limit is gone.
+      - name: An image larger than one bank must not link
+        run: |
+          if arm-none-eabi-gcc \
+               -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard \
+               -std=gnu11 -Wall -Wextra -Werror -O1 -IInc \
+               --specs=nano.specs --specs=nosys.specs \
+               -T STM32L476RGTX_FLASH.ld \
+               Src/*.c Startup/startup_stm32l476rgtx.s tests/oversize_image.c \
+               -o oversize.elf 2> oversize.log; then
+            echo "An image larger than one bank linked: the FLASH limit is gone."
+            exit 1
+          fi
+          cat oversize.log
+          grep -q "region .FLASH. overflowed" oversize.log
+
   lint:
     name: Static analysis
     runs-on: ubuntu-24.04

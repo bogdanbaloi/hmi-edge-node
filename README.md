@@ -418,12 +418,15 @@ Every push and every pull request runs four jobs, none of which needs a board:
 | Job | Question it answers |
 | --- | --- |
 | Host tests | does the logic still do what it claims |
-| Cross-compile | does it still build **and link** for the real Cortex-M4 |
+| Cross-compile | does it still build **and link** for the real Cortex-M4, and does an image larger than one flash bank still fail to link |
 | Static analysis | does it still hold the line on naming, size and bug classes |
 | Docs discipline | do the diagrams still validate, does Doxygen still run clean |
 
 The cross-compile uses the same flags as STM32CubeIDE and performs a full link,
 because a missing symbol or an overflowing section only shows up at link time.
+It then links once more with `tests/oversize_image.c`, an array that fills the
+whole FLASH region, and passes only if that link FAILS: a size limit nobody
+tests can be widened by accident.
 The docs job enforces the rule that every new piece carries a diagram validated
 with `plantuml -checkonly`, so the discipline is checked rather than remembered.
 
@@ -467,6 +470,26 @@ Clock: the MSI reset clock (4 MHz), no PLL setup. USART2 BRR = 35.
 Built with **STM32CubeIDE** (managed build, `arm-none-eabi-gcc`). Import the
 project, Build, then Run to flash over the on-board ST-Link. The Nucleo also
 mounts as a mass-storage drive, so a `.bin` can be flashed by drag-and-drop.
+
+### One bank, not the whole flash
+
+The chip has 1 MB of flash in two banks of 512 KB, and the linker script lets
+this image use **510 KB** of it, from `0x08000000`. That is the fourth OTA
+piece, and it is one line in `STM32L476RGTX_FLASH.ld`, with the reason next
+to it.
+
+An update writes the new image into the other bank, then swaps the two with
+the `BFB2` option bit, which remaps whichever bank is chosen to `0x08000000`.
+So every image must fit in one bank, and every image is linked for the same
+address. The last 2 KB page of each bank is kept for the `CONFIRMED` record,
+so the image stops before it: 512 KB minus 2 KB is 522240 bytes, the same
+`TOO_LARGE` limit the spec gives the host.
+
+Checked three ways before it was committed: the real firmware links, using
+6908 of the 522240 bytes; the oversize image fails with the region overflowed
+by exactly 6908 bytes, which shows the region is exactly 522240 bytes; and the
+same oversize image links fine against the old 1 MB script, which shows the new
+limit is what stops it. `docs/uml/flash-map.puml` has the addresses.
 
 ## Watch the output
 
@@ -567,3 +590,4 @@ checksum, sent outside a session, got no answer at all, as section 6 says.
 - OTA frame parser (one byte in, the resync rule): `docs/uml/ota-frame.puml`.
 - OTA update state machine (the session, and what each message may do): `docs/uml/ota-update.puml`.
 - OTA receive path (one frame from the wire through the interrupt to the answer): `docs/uml/ota-uart-rx.puml`.
+- Flash map (one image per bank, and the page it must not touch): `docs/uml/flash-map.puml`.

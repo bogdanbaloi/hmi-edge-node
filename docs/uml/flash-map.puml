@@ -1,0 +1,35 @@
+@startuml flash-map
+' Where an image may live in the 1 MB of flash, and why the linker stops it
+' at 510 KB. Grounded in STM32L476RGTX_FLASH.ld (MEMORY), Inc/flash.h
+' (FLASH_BANK_BYTES, FLASH_PAGE_BYTES) and industrial-hmi uart-flash-v1.md,
+' section 9 (answers 3 and 4).
+
+title Flash map: one image per bank, and the page it must not touch
+
+skinparam shadowing false
+skinparam rectangleBorderColor #555555
+
+rectangle "Bank mapped at 0x08000000 (the one running)" as running {
+  rectangle "image, linked for 0x08000000\n0x08000000 .. 0x0807F7FF\n510 KB = 522240 bytes\n(the linker's FLASH region)" as img1 #E8F0FE
+  rectangle "last 2 KB page\n0x0807F800 .. 0x0807FFFF\nCONFIRMED record (piece 6)" as rec1 #FFF4E5
+}
+
+rectangle "The other bank, seen at 0x08080000" as other {
+  rectangle "the update is written here\n0x08080000 .. 0x080FF7FF\n(piece 5)" as img2 #E8F0FE
+  rectangle "last 2 KB page\n0x080FF800 .. 0x080FFFFF\nits CONFIRMED record" as rec2 #FFF4E5
+}
+
+img1 -[hidden]down- rec1
+img2 -[hidden]down- rec2
+running -[hidden]right- other
+
+note bottom of other
+  BFB2 (piece 7) swaps which bank sits at 0x08000000,
+  so BOTH images are linked for the same address.
+  An image larger than 510 KB would reach the record
+  page, so it must not link at all: CI links
+  tests/oversize_image.c and expects
+  "region FLASH overflowed".
+end note
+
+@enduml
