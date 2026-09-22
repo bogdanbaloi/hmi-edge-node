@@ -5,6 +5,8 @@
 
 #include "ota_port.h"
 #include "core.h"
+#include "crc32.h"
+#include "crc_unit.h"
 #include "flash.h"
 #include "uart.h"
 
@@ -12,11 +14,6 @@
 /// CONFIRMED record (answer 3 to industrial-hmi): 522240 bytes, as pinned in
 /// the spec.
 #define OTA_PORT_IMAGE_CAPACITY (FLASH_BANK_BYTES - FLASH_PAGE_BYTES)
-
-/// What image_crc32 reports while nothing can have been written. The state
-/// machine never asks yet: it asks only at COMMIT, after every byte went in,
-/// and no byte can go in before piece 5.
-#define OTA_PORT_NOTHING_WRITTEN_CRC 0U
 
 static uint32_t now_ms(void *ctx) {
     (void)ctx;
@@ -46,26 +43,33 @@ static void running(void *ctx, ota_running_t *out) {
     out->image_state = (uint8_t)OTA_IMAGE_CONFIRMED;
 }
 
-/// Piece 5 writes the flash driver. Until then, nothing is erased.
+/// One mass erase of the spare bank, about 24.59 ms at worst.
 static ota_io_t erase_inactive(void *ctx) {
     (void)ctx;
-    return OTA_IO_FAILED;
+    return (flash_erase_spare() == FLASH_OK) ? OTA_IO_OK : OTA_IO_FAILED;
 }
 
-/// Piece 5 writes the flash driver. Until then, nothing is programmed.
 static ota_io_t program(void *ctx, uint32_t offset, const uint8_t *bytes,
                         uint16_t len) {
     (void)ctx;
-    (void)offset;
-    (void)bytes;
-    (void)len;
-    return OTA_IO_FAILED;
+    return (flash_program_spare(offset, bytes, len) == FLASH_OK) ? OTA_IO_OK
+                                                                 : OTA_IO_FAILED;
 }
 
+/**
+ * Read back what is in the spare bank, rather than adding up what was sent:
+ * this is what catches a byte that never made it into flash.
+ *
+ * The peripheral does it in a fraction of the time, measured: software took
+ * about 4.6 s for a full image and the host allows 2 s. The software version
+ * stays as the fallback for a unit that failed its own check at start-up,
+ * because a wrong CRC would fail every COMMIT on a good image.
+ */
 static uint32_t image_crc32(void *ctx, uint32_t size) {
     (void)ctx;
-    (void)size;
-    return OTA_PORT_NOTHING_WRITTEN_CRC;
+    return (crc_unit_is_trustworthy() != 0U)
+               ? crc_unit_compute_words(flash_spare_words(), size)
+               : crc32_compute(flash_spare_image(), size);
 }
 
 /// Piece 7 switches banks through BFB2. Until then, never.

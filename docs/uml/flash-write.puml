@@ -1,0 +1,62 @@
+@startuml flash-write
+' Erasing and programming the spare bank. Grounded in Src/flash.c and
+' RM0351 Rev 9, sections 3.3.5 to 3.3.8.
+
+title One update session, seen from the flash driver
+
+skinparam shadowing false
+
+start
+:BEGIN arrives, the image fits;
+:spare bank = the one NOT running\n(from SYSCFG FB_MODE);
+note right
+  MER1 and MER2 erase PHYSICAL banks.
+  FB_MODE decides which physical bank
+  is seen at 0x08000000, so the bit is
+  chosen from the running bank, never
+  from an address (RM0351 3.5).
+end note
+:wait BSY, unlock with KEY1 then KEY2,\nclear the error flags;
+:set MER1 or MER2, set START, wait BSY;
+if (any error flag set?) then (yes)
+  :lock, flush the data cache;
+  :NAK FLASH_ERROR, session ends;
+  stop
+else (no)
+  :lock, flush the data cache;
+  :ACK;
+endif
+
+repeat
+  :DATA at the expected offset;
+  if (offset and length are multiples of 8,\nand inside the bank?) then (no)
+    :refused without touching flash;
+    :NAK FLASH_ERROR;
+    stop
+  else (yes)
+  endif
+  :unlock, then for each double word:\nclear errors, set PG, write low word,\nwrite high word, wait BSY;
+  :lock, flush the data cache;
+  :ACK;
+repeat while (more DATA?) is (yes)
+->no;
+
+:COMMIT;
+:CRC-32/ISO-HDLC over the image\nREAD BACK from the spare bank;
+note right
+  Read back, not accumulated as the
+  bytes arrived: that is what catches
+  a byte that never reached flash.
+  The data cache was flushed, so this
+  reads flash and not stale cache.
+end note
+if (matches the CRC32 from BEGIN?) then (no)
+  :NAK VERIFY_FAILED, session ends;
+  stop
+else (yes)
+endif
+:switch banks (piece 7);
+note right: until piece 7 this refuses,\nso a good run ends in NAK FLASH_ERROR
+stop
+
+@enduml

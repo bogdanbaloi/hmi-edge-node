@@ -69,9 +69,9 @@ on a host PC:
 
 | Layer | Files | Job |
 | --- | --- | --- |
-| HAL / BSP | `core`, `board`, `uart`, `adc`, `flash`, `registers.h` | the only code that touches registers |
+| HAL / BSP | `core`, `board`, `uart`, `adc`, `flash`, `crc_unit`, `registers.h` | the only code that touches registers |
 | App | `telemetry`, `temperature`, `ota_frame`, `ota_update` | pure logic: a button edge -> the frames, counts -> degrees, bytes -> update messages -> answers |
-| Utility | `byte_ring`, `crc16`, `le_bytes.h` | pure building blocks with no dependency, used by either layer: `uart` queues received bytes in `byte_ring` |
+| Utility | `byte_ring`, `crc16`, `crc32`, `le_bytes.h` | pure building blocks with no dependency, used by either layer: `uart` queues received bytes in `byte_ring` |
 | Composition | `main.c`, `ota_port` | wires the HAL to the app and runs the loop |
 
 `telemetry` depends on injected function pointers (a temperature reader and a
@@ -210,8 +210,8 @@ mingw32-make -C tests run
 ```
 
 No board, no test framework, no dependency on the other repo. It compiles the
-pure-logic sources with the desktop compiler already on PATH. Six binaries,
-six different questions:
+pure-logic sources with the desktop compiler already on PATH. Seven binaries,
+seven different questions:
 
 ### `contract_frame_test`: does the wire format still match?
 
@@ -430,6 +430,19 @@ tests can be widened by accident.
 The docs job enforces the rule that every new piece carries a diagram validated
 with `plantuml -checkonly`, so the discipline is checked rather than remembered.
 
+### The local lint gate is not the CI lint gate
+
+Same `clang-tidy`, same config, different answer, and it cost a red CI run.
+`bugprone-implicit-widening-of-multiplication-result` caught `512U * 1024U`
+being widened to an `unsigned long` address in `flash.h`. On Windows
+`unsigned long` is 32 bits, so nothing widens and the check stays silent; on
+the Ubuntu runner it is 64 bits, so it fires. The rule that follows: a
+constant that takes part in an address is written `UL`, and a green local lint
+is evidence, not proof. Running the local lint with a Linux target does catch
+it, and was checked against a deliberate mutant, but the files that include
+`string.h` or `stdio.h` then fail to parse with the MinGW headers, so CI stays
+the authority.
+
 ### Static analysis, and what it is not
 
 `clang-tidy` runs with `WarningsAsErrors`, so the first finding turns the build
@@ -548,6 +561,83 @@ said 35 resets, from one session never read and one count made by eye. A
 line count then said 43, because `[FF FF FF]` holds three bytes on one line.
 The logs held 46.
 
+### `crc32_test`: is it the same CRC32 the host computes?
+
+The image checksum of the update protocol is CRC-32/ISO-HDLC, and the test
+asserts its standard check value, `0xCBF43926` over `123456789`. industrial-hmi
+reproduced the same value with zlib when the variant was pinned, so both sides
+are anchored to the catalogue rather than to each other. The other checks are
+the properties the verify step rests on: a single flipped bit changes the
+answer, and erased `0xFF` padding behind an image is not part of it.
+
+It is a 256-entry table built once into RAM, not the bitwise form. Bitwise
+costs about 25 cycles per byte, and even the table was not enough: **measured
+on the board, verifying 64 KB took 572 ms**, so a full 510 KB image would take
+about 4.6 s, while the host allows 2 s for an answer to `COMMIT`.
+
+So the board uses the L4's CRC peripheral instead (`crc_unit`), and this
+software version stays for two jobs: it is the reference the host test anchors
+to the catalogue, and it is the fallback when the peripheral fails its own
+check. That check runs at start-up: the unit computes the CRC of `123456789`
+and must produce `0xCBF43926`. A misconfigured unit would otherwise fail every
+`COMMIT` on a perfectly good image, and blame the image.
+
+Three measurements of the same 64 KB verify, each on the board, each the time
+between `COMMIT` leaving the PC and the answer arriving:
+
+| How the image is fed to the CRC | 64 KB | extrapolated to 510 KB |
+| --- | --- | --- |
+| software, table in RAM | 572 ms | about 4.6 s |
+| peripheral, each word built from four bytes | 245 ms | about 1.95 s |
+| peripheral, words read straight from flash | **91 ms** | **about 0.73 s** |
+
+The middle row is the interesting one: the peripheral alone was not enough,
+because at `-O0` the loop that assembled each word cost more than the CRC did.
+An image in flash starts at a bank boundary, so it is word aligned and every
+word is one load. These are Debug (`-O0`) numbers; the CI build is `-O1`.
+
+### Writing the other bank
+
+The fifth OTA piece is the flash driver, and it is the first code that writes
+flash. Every sequence is from RM0351 Rev 9, sections 3.3.5 to 3.3.8: unlock
+with the two keys, mass erase with `MER1` or `MER2`, program one double word
+at a time, wait on `BSY`, read the error flags.
+
+Three things the driver refuses by construction. It never erases the bank the
+CPU runs from. It refuses any write that is unaligned or would run past the
+spare bank. And it cannot change option bytes at all, because `FLASH_OPTR` and
+`FLASH_OPTKEYR` are not defined in `registers.h`: `RDP` level 2 locks the chip
+forever, that step belongs to piece 7, and a register that does not exist
+cannot be written by accident.
+
+**The bit that would have erased the running image.** `MER1` and `MER2` erase
+*physical* banks, while `FB_MODE` decides which physical bank is seen at
+`0x08000000`. RM0351 settles it in section 3.5: for one address, the bank 1
+protection registers apply when booting from bank 1, and the bank 2 ones "if
+the two banks are swapped". So the driver picks the erase bit from the running
+bank, never from an address.
+
+**Caches.** After an erase or a write, the data cache can still hold what used
+to be there, and the CRC read-back would then check the old bytes. The driver
+flushes the data cache after every operation (section 3.3.7, "Programming and
+caches").
+
+`ota-try-update.ps1` drives a whole session against the board: `BEGIN`, `DATA`,
+`COMMIT`. It builds every frame itself, and checks its own two checksums
+against their catalogue values before it opens the port, so a wrong script
+cannot accuse the board.
+
+```
+powershell -ExecutionPolicy Bypass -File ota-try-update.ps1
+powershell -ExecutionPolicy Bypass -File ota-try-update.ps1 -Corrupt
+```
+
+While piece 7 is missing, a good run ends at `COMMIT` with `NAK 05`,
+`FLASH_ERROR`: the image verified in flash and the board then refused to switch
+banks. With `-Corrupt` the same session must end in `NAK 06`, `VERIFY_FAILED`.
+The pair is the point: without the second run, a board that stored nothing
+could not be told from one that stored everything.
+
 ## Ask the board what it runs
 
 `ota-info.ps1` sends one `INFO_REQ` and shows every byte that comes back. It
@@ -591,3 +681,4 @@ checksum, sent outside a session, got no answer at all, as section 6 says.
 - OTA update state machine (the session, and what each message may do): `docs/uml/ota-update.puml`.
 - OTA receive path (one frame from the wire through the interrupt to the answer): `docs/uml/ota-uart-rx.puml`.
 - Flash map (one image per bank, and the page it must not touch): `docs/uml/flash-map.puml`.
+- Flash write (unlock, erase, program, and what each refusal means): `docs/uml/flash-write.puml`.

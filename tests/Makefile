@@ -17,9 +17,10 @@ OTA_SRC      := ota_frame_test.c ../Src/ota_frame.c ../Src/crc16.c
 UPDATE_SRC   := ota_update_test.c ../Src/ota_update.c ../Src/ota_frame.c \
                 ../Src/crc16.c
 RING_SRC     := byte_ring_test.c ../Src/byte_ring.c
+CRC32_SRC    := crc32_test.c ../Src/crc32.c
 
 TARGETS := contract_frame_test temperature_test fault_test ota_frame_test \
-           ota_update_test byte_ring_test
+           ota_update_test byte_ring_test crc32_test
 
 .PHONY: all run clean
 
@@ -58,6 +59,10 @@ ota_update_test: $(UPDATE_SRC) ../Inc/ota_update.h ../Inc/ota_frame.h \
 byte_ring_test: $(RING_SRC) ../Inc/byte_ring.h ../Inc/ota_frame.h
 	$(CC) $(CFLAGS) -o $@ $(RING_SRC)
 
+# The image checksum, anchored to the variant's standard check value.
+crc32_test: $(CRC32_SRC) ../Inc/crc32.h
+	$(CC) $(CFLAGS) -o $@ $(CRC32_SRC)
+
 run: $(TARGETS)
 	./contract_frame_test
 	./temperature_test
@@ -65,6 +70,7 @@ run: $(TARGETS)
 	./ota_frame_test
 	./ota_update_test
 	./byte_ring_test
+	./crc32_test
 
 clean:
 	rm -f $(TARGETS) $(addsuffix .exe,$(TARGETS))

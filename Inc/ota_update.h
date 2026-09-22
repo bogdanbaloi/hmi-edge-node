@@ -80,9 +80,9 @@
 #define OTA_IMAGE_TRIAL     1U  ///< INFO state: on trial, awaiting CONFIRM.
 
 /*
- * INFO active bank. The spec says `u8` and not which values, so these are
- * PROPOSED to industrial-hmi on the board: the bank numbers ST uses in RM0351,
- * 1 and 2, rather than 0 and 1, so a log line reads the same as the manual.
+ * INFO active bank, AGREED with industrial-hmi on 2026-09-22 and pinned in
+ * section 4: the bank numbers ST uses in RM0351, 1 and 2, rather than 0 and 1,
+ * so a log line reads the same as the manual.
  */
 #define OTA_BANK_1 1U  ///< INFO bank: bank 1.
 #define OTA_BANK_2 2U  ///< INFO bank: bank 2.
