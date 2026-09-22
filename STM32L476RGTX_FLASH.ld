@@ -181,6 +181,12 @@ SECTIONS
     _esram2 = .;       /* create a global symbol at sram2 end */
   } >SRAM2 AT> FLASH
 
+  /* Where the image loaded into flash ends. The CONFIRMED record identifies
+     the running image by the checksum of everything up to here, so that a
+     record written by one build cannot confirm a different one. Flash keeps
+     .data and .sram2 after the code, so this is the last of it. */
+  k_firmware_image_end = ALIGN(LOADADDR(.sram2) + SIZEOF(.sram2), 8);
+
   /* Uninitialized data section into "RAM" Ram type memory */
   . = ALIGN(4);
   .bss :

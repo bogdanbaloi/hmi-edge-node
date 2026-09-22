@@ -34,19 +34,19 @@ static void check(int condition, const char *what, int line) {
 #define NOT_CONFIRMED 0U
 /// Confirmed.
 #define CONFIRMED 1U
-/// The version this test pretends to be running.
-#define THIS_VERSION 7U
-/// Any other version, for the record left behind by another image.
-#define OTHER_VERSION 8U
+/// The checksum this test pretends the running image has.
+#define THIS_IMAGE 0x1234ABCDU
+/// A different image, one bit away: another build of the same firmware.
+#define OTHER_IMAGE 0x1234ABCEU
 /// What an erased flash byte reads as.
 #define ERASED_BYTE 0xFFU
 /// A page written to all zeros, the other degenerate case.
 #define ZEROED_BYTE 0x00U
 
-static void a_record_built_here_confirms_this_version(void) {
+static void a_record_built_here_confirms_this_image(void) {
     uint8_t record[CONFIRM_RECORD_BYTES];
-    confirm_record_build(record, THIS_VERSION);
-    CHECK(confirm_record_confirms(record, THIS_VERSION) == CONFIRMED);
+    confirm_record_build(record, THIS_IMAGE);
+    CHECK(confirm_record_confirms(record, THIS_IMAGE) == CONFIRMED);
 }
 
 /// The case that matters most: a board that was never confirmed, or one whose
@@ -54,22 +54,24 @@ static void a_record_built_here_confirms_this_version(void) {
 static void erased_flash_confirms_nothing(void) {
     uint8_t erased[CONFIRM_RECORD_BYTES];
     memset(erased, ERASED_BYTE, sizeof erased);
-    CHECK(confirm_record_confirms(erased, THIS_VERSION) == NOT_CONFIRMED);
+    CHECK(confirm_record_confirms(erased, THIS_IMAGE) == NOT_CONFIRMED);
 }
 
 /// All zeros is not "written", it is a different kind of nothing.
 static void a_zeroed_page_confirms_nothing(void) {
     uint8_t zeroed[CONFIRM_RECORD_BYTES];
     memset(zeroed, ZEROED_BYTE, sizeof zeroed);
-    CHECK(confirm_record_confirms(zeroed, THIS_VERSION) == NOT_CONFIRMED);
+    CHECK(confirm_record_confirms(zeroed, THIS_IMAGE) == NOT_CONFIRMED);
 }
 
 /// A record from the image that ran before this one must not confirm this
 /// one: the new image would skip its trial on the strength of an old promise.
-static void another_version_confirms_nothing(void) {
+/// This is the bug the review found on 2026-09-22, when the identity was a
+/// version constant that every build shared.
+static void another_image_confirms_nothing(void) {
     uint8_t record[CONFIRM_RECORD_BYTES];
-    confirm_record_build(record, OTHER_VERSION);
-    CHECK(confirm_record_confirms(record, THIS_VERSION) == NOT_CONFIRMED);
+    confirm_record_build(record, OTHER_IMAGE);
+    CHECK(confirm_record_confirms(record, THIS_IMAGE) == NOT_CONFIRMED);
 }
 
 /// Any single byte of the marker or the version corrupted, and it is void.
@@ -77,31 +79,31 @@ static void another_version_confirms_nothing(void) {
 static void one_wrong_byte_anywhere_voids_it(void) {
     for (uint32_t at = 0U; at < CONFIRM_RECORD_BYTES; at++) {
         uint8_t record[CONFIRM_RECORD_BYTES];
-        confirm_record_build(record, THIS_VERSION);
+        confirm_record_build(record, THIS_IMAGE);
         record[at] = (uint8_t)(record[at] ^ 1U);
-        CHECK(confirm_record_confirms(record, THIS_VERSION) == NOT_CONFIRMED);
+        CHECK(confirm_record_confirms(record, THIS_IMAGE) == NOT_CONFIRMED);
     }
 }
 
-/// The version really is stored, not implied: two versions give two records.
-static void the_version_is_part_of_the_record(void) {
+/// The identity really is stored, not implied: two images give two records.
+static void the_identity_is_part_of_the_record(void) {
     uint8_t mine[CONFIRM_RECORD_BYTES];
     uint8_t other[CONFIRM_RECORD_BYTES];
-    confirm_record_build(mine, THIS_VERSION);
-    confirm_record_build(other, OTHER_VERSION);
+    confirm_record_build(mine, THIS_IMAGE);
+    confirm_record_build(other, OTHER_IMAGE);
     CHECK(memcmp(mine, other, CONFIRM_RECORD_BYTES) != 0);
-    CHECK(confirm_record_confirms(other, OTHER_VERSION) == CONFIRMED);
+    CHECK(confirm_record_confirms(other, OTHER_IMAGE) == CONFIRMED);
 }
 
 int main(void) {
     (void)printf("unit: the CONFIRMED record in flash\n");
 
-    a_record_built_here_confirms_this_version();
+    a_record_built_here_confirms_this_image();
     erased_flash_confirms_nothing();
     a_zeroed_page_confirms_nothing();
-    another_version_confirms_nothing();
+    another_image_confirms_nothing();
     one_wrong_byte_anywhere_voids_it();
-    the_version_is_part_of_the_record();
+    the_identity_is_part_of_the_record();
 
     if (g_failures == 0U) {
         (void)printf("OK: %u checks passed\n", g_checks);

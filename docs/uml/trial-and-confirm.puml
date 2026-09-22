@@ -15,9 +15,10 @@ state Running {
   state "Confirmed" as Confirmed
 
   [*] --> Trial : no record in the last page\nof the running bank
-  [*] --> Confirmed : the record is there\nAND names this version
+  [*] --> Confirmed : the record is there AND its\nchecksum is THIS image
   Trial --> Confirmed : CONFIRM\n/ write the record, ACK
-  Confirmed --> Confirmed : CONFIRM again\n/ record already there, ACK
+  Confirmed --> Confirmed : CONFIRM again\n/ same record already there, ACK
+  Trial --> Trial : CONFIRM with another image record\nin the page / NAK FLASH_ERROR
 }
 
 note right of Running
@@ -26,6 +27,10 @@ note right of Running
   again after each reset, which is the mistake the
   record exists to prevent. No record means
   unconfirmed (spec section 9, answer 4).
+  The record names the image by the CHECKSUM of
+  everything the linker loaded, not by a version
+  constant: a constant is the same in every build,
+  so one build confirmed the next.
 end note
 
 note bottom of Trial

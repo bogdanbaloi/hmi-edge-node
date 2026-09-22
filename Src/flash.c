@@ -36,6 +36,19 @@ const uint32_t *flash_spare_words(void) {
     return (const uint32_t *)FLASH_SPARE_BASE;
 }
 
+const uint32_t *flash_running_words(void) {
+    return (const uint32_t *)FLASH_RUNNING_BASE;
+}
+
+/// Placed by the linker script at the end of everything loaded into flash.
+/// Declared as an array so the symbol itself is the address, never read.
+extern const uint8_t k_firmware_image_end[];
+
+uint32_t flash_image_bytes(void) {
+    return (uint32_t)(k_firmware_image_end -
+                      (const uint8_t *)FLASH_RUNNING_BASE);
+}
+
 const uint8_t *flash_confirm_record(void) {
     return (const uint8_t *)FLASH_CONFIRM_BASE;
 }
@@ -127,13 +140,44 @@ static flash_status_t program_double_word(uint32_t address,
 /// looks like in one byte.
 #define FLASH_ERASED_BYTE 0xFFU
 
-flash_status_t flash_write_confirm_record(
-    const uint8_t record[FLASH_WRITE_BYTES]) {
+/// What the record page holds: exactly what we would write, something else, or
+/// nothing at all.
+typedef enum {
+    RECORD_ERASED = 0,
+    RECORD_SAME,
+    RECORD_DIFFERENT
+} record_state_t;
+
+static record_state_t record_state(const uint8_t *wanted) {
     const uint8_t *existing = flash_confirm_record();
+    uint32_t erased = 1U;
+    uint32_t same = 1U;
     for (uint32_t i = 0U; i < FLASH_WRITE_BYTES; i++) {
         if (existing[i] != FLASH_ERASED_BYTE) {
-            return FLASH_OK;  /* already written, and writing twice fails */
+            erased = 0U;
         }
+        if (existing[i] != wanted[i]) {
+            same = 0U;
+        }
+    }
+    if (erased != 0U) {
+        return RECORD_ERASED;
+    }
+    return (same != 0U) ? RECORD_SAME : RECORD_DIFFERENT;
+}
+
+flash_status_t flash_write_confirm_record(
+    const uint8_t record[FLASH_WRITE_BYTES]) {
+    const record_state_t state = record_state(record);
+    if (state == RECORD_SAME) {
+        return FLASH_OK;  /* already written, and writing twice fails */
+    }
+    if (state == RECORD_DIFFERENT) {
+        /* Something else is in the page: a record of another image, or half a
+           record left by a power cut. Either way this write cannot happen
+           without erasing the page, so say so instead of answering OK to a
+           confirmation that will not hold. */
+        return FLASH_FAILED;
     }
 
     wait_while_busy();
@@ -149,11 +193,14 @@ flash_status_t flash_program_spare(uint32_t offset, const uint8_t *bytes,
                                    uint32_t len) {
     /* Refused, not attempted: an unaligned or overlong write would set
        PGAERR or SIZERR anyway, but the guard also keeps every address this
-       function touches inside the spare bank's window. */
+       function touches inside the spare bank's IMAGE area. Its last page is
+       that bank's CONFIRMED record: image bytes landing there could form a
+       record that looks valid, and the installed image would boot already
+       confirmed, without the trial the record exists to require. */
     if ((offset % FLASH_WRITE_BYTES) != 0U ||
         (len % FLASH_WRITE_BYTES) != 0U ||
-        len > FLASH_BANK_BYTES ||
-        offset > FLASH_BANK_BYTES - len) {
+        len > FLASH_IMAGE_BYTES ||
+        offset > FLASH_IMAGE_BYTES - len) {
         return FLASH_REFUSED;
     }
 

@@ -13,8 +13,21 @@
 
 /// The image may fill its bank except the last page, which holds the
 /// CONFIRMED record (answer 3 to industrial-hmi): 522240 bytes, as pinned in
-/// the spec.
-#define OTA_PORT_IMAGE_CAPACITY (FLASH_BANK_BYTES - FLASH_PAGE_BYTES)
+/// the spec. The driver owns the number; this is the same one.
+#define OTA_PORT_IMAGE_CAPACITY FLASH_IMAGE_BYTES
+
+/**
+ * What identifies the image that is running now: the checksum of everything
+ * the linker loaded into flash. Two builds differ somewhere in there, so a
+ * CONFIRMED record written for one cannot confirm another, which a version
+ * constant could not promise (see confirm_record.h).
+ */
+static uint32_t running_identity(void) {
+    const uint32_t bytes = flash_image_bytes();
+    return (crc_unit_is_trustworthy() != 0U)
+               ? crc_unit_compute_words(flash_running_words(), bytes)
+               : crc32_compute((const uint8_t *)flash_running_words(), bytes);
+}
 
 static uint32_t now_ms(void *ctx) {
     (void)ctx;
@@ -41,7 +54,7 @@ static void running(void *ctx, ota_running_t *out) {
                            ? (uint8_t)OTA_BANK_2
                            : (uint8_t)OTA_BANK_1;
     out->image_state = (confirm_record_confirms(flash_confirm_record(),
-                                                OTA_PORT_FIRMWARE_VERSION) != 0U)
+                                                running_identity()) != 0U)
                            ? (uint8_t)OTA_IMAGE_CONFIRMED
                            : (uint8_t)OTA_IMAGE_TRIAL;
 }
@@ -86,7 +99,7 @@ static ota_io_t select_new_bank(void *ctx) {
 static ota_io_t confirm(void *ctx) {
     (void)ctx;
     uint8_t record[FLASH_WRITE_BYTES];
-    confirm_record_build(record, OTA_PORT_FIRMWARE_VERSION);
+    confirm_record_build(record, running_identity());
     return (flash_write_confirm_record(record) == FLASH_OK) ? OTA_IO_OK
                                                             : OTA_IO_FAILED;
 }
