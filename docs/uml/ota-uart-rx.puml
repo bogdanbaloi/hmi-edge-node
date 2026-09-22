@@ -1,0 +1,56 @@
+@startuml ota-uart-rx
+' How a frame from the update agent reaches the state machine, and how the
+' answer goes back. Grounded in Src/uart.c (USART2_IRQHandler, uart_read_byte),
+' Src/byte_ring.c, Src/main.c (ota_poll) and Src/ota_board.c.
+
+title One INFO_REQ, from the wire to the answer
+
+skinparam shadowing false
+
+participant "Host agent\n(industrial-hmi)" as host
+participant "USART2\n(one byte deep)" as usart
+participant "USART2_IRQHandler" as isr
+participant "byte_ring\n(512 bytes)" as ring
+participant "main loop\nota_poll()" as mainloop
+participant "ota_frame_parser" as parser
+participant "ota_update" as sm
+participant "ota_board port\nuart_send_bytes()" as port
+
+host -> usart : A5 01 01 00 00 00 E9 CD\none byte every 87 us
+loop usart gets each byte
+  usart -> isr : RXNE
+  isr -> usart : read RDR (clears RXNE)
+  isr -> ring : push(byte)
+end
+note right of isr
+  Why an interrupt: the USART holds ONE byte,
+  and the next overwrites it 87 us later. The
+  loop can be busy for 2.7 ms sending a
+  telemetry line, so it cannot promise that.
+  An overrun raises this same interrupt and is
+  cleared through ICR, or it would fire forever.
+end note
+
+loop whenever it gets there
+  mainloop -> ring : pop()
+  ring --> mainloop : byte
+  mainloop -> parser : feed(byte)
+end
+parser -> sm : on_frame(INFO_REQ, SEQ 1, CRC OK)
+sm -> port : running()
+note right of port
+  version 1, bank from SYSCFG FB_MODE,
+  CONFIRMED (no trial exists before piece 6)
+end note
+sm -> port : send(INFO frame)
+port -> host : A5 81 01 00 06 00 01 00 00 00 01 00 F3 1C
+
+legend bottom
+  One writer (the interrupt) and one reader (the loop), so the ring needs no
+  interrupt masking: each side writes only its own index. Full drops the NEW
+  byte; the frame CRC catches the gap and the host resends.
+  Erase, program, bank switch and confirm answer FAILED until pieces 5 to 7,
+  so BEGIN gets NAK FLASH_ERROR: refused honestly, never faked.
+endlegend
+
+@enduml

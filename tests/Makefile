@@ -16,9 +16,10 @@ FAULT_SRC    := fault_test.c ../Src/fault.c
 OTA_SRC      := ota_frame_test.c ../Src/ota_frame.c ../Src/crc16.c
 UPDATE_SRC   := ota_update_test.c ../Src/ota_update.c ../Src/ota_frame.c \
                 ../Src/crc16.c
+RING_SRC     := byte_ring_test.c ../Src/byte_ring.c
 
 TARGETS := contract_frame_test temperature_test fault_test ota_frame_test \
-           ota_update_test
+           ota_update_test byte_ring_test
 
 .PHONY: all run clean
 
@@ -52,12 +53,18 @@ ota_update_test: $(UPDATE_SRC) ../Inc/ota_update.h ../Inc/ota_frame.h \
                  ../Inc/ota_frame_parser.h ../Inc/le_bytes.h
 	$(CC) $(CFLAGS) -o $@ $(UPDATE_SRC)
 
+# The queue between the UART receive interrupt and the main loop. The PC
+# cannot race an interrupt, so this checks the index arithmetic it relies on.
+byte_ring_test: $(RING_SRC) ../Inc/byte_ring.h ../Inc/ota_frame.h
+	$(CC) $(CFLAGS) -o $@ $(RING_SRC)
+
 run: $(TARGETS)
 	./contract_frame_test
 	./temperature_test
 	./fault_test
 	./ota_frame_test
 	./ota_update_test
+	./byte_ring_test
 
 clean:
 	rm -f $(TARGETS) $(addsuffix .exe,$(TARGETS))

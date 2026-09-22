@@ -93,7 +93,10 @@ CheckOptions:
   #
   #   SystemInit          called by the ARM startup code, by that exact symbol.
   #   _[a-z_]+            the newlib syscall stubs (_write, _sbrk).
-  #   .*_Handler          the fault and interrupt vectors. The startup file
+  #   .*_(IRQ)?Handler    the fault and interrupt vectors. ST names faults
+  #                       HardFault_Handler but interrupts USART2_IRQHandler,
+  #                       with no underscore before Handler, so the plain
+  #                       .*_Handler form missed every interrupt. The startup file
   #                       declares each one .weak and aliases it to
   #                       Default_Handler; a strong definition only overrides
   #                       the alias if the symbol matches CHARACTER FOR
@@ -102,4 +105,4 @@ CheckOptions:
   #                       and silently go back to the infinite loop, which is
   #                       precisely the silence Src/fault.c exists to remove.
   #                       This exemption is load-bearing, not cosmetic.
-  readability-identifier-naming.FunctionIgnoredRegexp: 'SystemInit|_[a-z_]+|.*_Handler'
+  readability-identifier-naming.FunctionIgnoredRegexp: 'SystemInit|_[a-z_]+|.*_(IRQ)?Handler'
