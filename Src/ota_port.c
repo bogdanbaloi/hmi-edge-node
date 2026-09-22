@@ -1,32 +1,22 @@
 /**
- * @file ota_board.c
- * @brief The update port on the Nucleo. See ota_board.h for what is real yet.
+ * @file ota_port.c
+ * @brief The update port on the Nucleo. See ota_port.h for what is real yet.
  */
 
-#include "ota_board.h"
+#include "ota_port.h"
 #include "core.h"
-#include "registers.h"
+#include "flash.h"
 #include "uart.h"
 
-/// One flash bank of the STM32L476RG: 512 KB (RM0351, dual bank mode).
-#define FLASH_BANK_BYTES (512U * 1024U)
-/// One flash page, the smallest erasable unit: 2 KB.
-#define FLASH_PAGE_BYTES (2U * 1024U)
 /// The image may fill its bank except the last page, which holds the
 /// CONFIRMED record (answer 3 to industrial-hmi): 522240 bytes, as pinned in
 /// the spec.
-#define OTA_BOARD_IMAGE_CAPACITY (FLASH_BANK_BYTES - FLASH_PAGE_BYTES)
+#define OTA_PORT_IMAGE_CAPACITY (FLASH_BANK_BYTES - FLASH_PAGE_BYTES)
 
 /// What image_crc32 reports while nothing can have been written. The state
 /// machine never asks yet: it asks only at COMMIT, after every byte went in,
 /// and no byte can go in before piece 5.
-#define OTA_BOARD_NOTHING_WRITTEN_CRC 0U
-
-void ota_board_init(void) {
-    /* SYSCFG is clock-gated at reset, and a gated peripheral reads as 0,
-       which would report bank 1 from either bank. */
-    RCC_APB2ENR |= RCC_APB2ENR_SYSCFGEN;
-}
+#define OTA_PORT_NOTHING_WRITTEN_CRC 0U
 
 static uint32_t now_ms(void *ctx) {
     (void)ctx;
@@ -39,8 +29,8 @@ static void send(void *ctx, const uint8_t *bytes, size_t len) {
 }
 
 /**
- * The bank comes from FB_MODE, which the boot code sets from the BFB2 option
- * bit, so it is the bank really running, not the one that was meant to.
+ * The driver names the bank the way ST does; the protocol's numbers are
+ * mapped here, in the one place that knows both.
  *
  * The state is CONFIRMED for now, on purpose. Until piece 6 there is no trial
  * at all: the only image is the one the ST-Link wrote, nothing can roll it
@@ -49,8 +39,8 @@ static void send(void *ctx, const uint8_t *bytes, size_t len) {
  */
 static void running(void *ctx, ota_running_t *out) {
     (void)ctx;
-    out->version = OTA_BOARD_FIRMWARE_VERSION;
-    out->active_bank = ((SYSCFG_MEMRMP & SYSCFG_MEMRMP_FB_MODE) != 0U)
+    out->version = OTA_PORT_FIRMWARE_VERSION;
+    out->active_bank = (flash_running_bank() == FLASH_BANK_2)
                            ? (uint8_t)OTA_BANK_2
                            : (uint8_t)OTA_BANK_1;
     out->image_state = (uint8_t)OTA_IMAGE_CONFIRMED;
@@ -75,7 +65,7 @@ static ota_io_t program(void *ctx, uint32_t offset, const uint8_t *bytes,
 static uint32_t image_crc32(void *ctx, uint32_t size) {
     (void)ctx;
     (void)size;
-    return OTA_BOARD_NOTHING_WRITTEN_CRC;
+    return OTA_PORT_NOTHING_WRITTEN_CRC;
 }
 
 /// Piece 7 switches banks through BFB2. Until then, never.
@@ -97,7 +87,7 @@ static void request_reset(void *ctx) {
 
 static const ota_update_port_t k_port = {
     .ctx = NULL,
-    .image_capacity = OTA_BOARD_IMAGE_CAPACITY,
+    .image_capacity = OTA_PORT_IMAGE_CAPACITY,
     .now_ms = now_ms,
     .send = send,
     .running = running,
@@ -109,6 +99,6 @@ static const ota_update_port_t k_port = {
     .request_reset = request_reset,
 };
 
-const ota_update_port_t *ota_board_port(void) {
+const ota_update_port_t *ota_port(void) {
     return &k_port;
 }

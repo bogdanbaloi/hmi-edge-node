@@ -1,15 +1,16 @@
-#ifndef OTA_BOARD_H
-#define OTA_BOARD_H
+#ifndef OTA_PORT_H
+#define OTA_PORT_H
 
 #include "ota_update.h"
 
 /**
- * @file ota_board.h
- * @brief The board's side of the update port: what ::ota_update_port_t is
- *        wired to on the Nucleo.
+ * @file ota_port.h
+ * @brief What ::ota_update_port_t is wired to on the Nucleo.
  *
- * HAL, like `uart` and `adc`: the only place SYSCFG is touched, and later the
- * flash controller. The state machine never sees any of it.
+ * Composition, like the temperature adapter in main.c: it joins the drivers
+ * (`core`, `uart`, `flash`) to the update logic and touches no register
+ * itself. It sits here, and not in a driver, because a driver that knew the
+ * port type would make the HAL depend on application code.
  *
  * **What is real today (piece 3 of 7):** the clock, sending, and INFO. The
  * board answers INFO_REQ with its version and the bank it runs from.
@@ -27,12 +28,10 @@
  * to be sent as an update gets a higher one, which is how the host tells after
  * the switch that the new image really runs.
  */
-#define OTA_BOARD_FIRMWARE_VERSION 1U
+#define OTA_PORT_FIRMWARE_VERSION 1U
 
-/// Turn on what the port needs. Call once, before the first frame can arrive.
-void ota_board_init(void);
+/// The port, with every member set. Lives as long as the program. Needs
+/// flash_init() to have run before the first INFO_REQ.
+const ota_update_port_t *ota_port(void);
 
-/// The port, with every member set. Lives as long as the program.
-const ota_update_port_t *ota_board_port(void);
-
-#endif /* OTA_BOARD_H */
+#endif /* OTA_PORT_H */

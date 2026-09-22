@@ -1,7 +1,7 @@
 @startuml ota-uart-rx
 ' How a frame from the update agent reaches the state machine, and how the
 ' answer goes back. Grounded in Src/uart.c (USART2_IRQHandler, uart_read_byte),
-' Src/byte_ring.c, Src/main.c (ota_poll) and Src/ota_board.c.
+' Src/byte_ring.c, Src/main.c (ota_poll), Src/ota_port.c and Src/flash.c.
 
 title One INFO_REQ, from the wire to the answer
 
@@ -14,7 +14,7 @@ participant "byte_ring\n(512 bytes)" as ring
 participant "main loop\nota_poll()" as mainloop
 participant "ota_frame_parser" as parser
 participant "ota_update" as sm
-participant "ota_board port\nuart_send_bytes()" as port
+participant "ota_port\n(composition)" as port
 
 host -> usart : A5 01 01 00 00 00 E9 CD\none byte every 87 us
 loop usart gets each byte
@@ -39,7 +39,8 @@ end
 parser -> sm : on_frame(INFO_REQ, SEQ 1, CRC OK)
 sm -> port : running()
 note right of port
-  version 1, bank from SYSCFG FB_MODE,
+  version 1, bank from flash_running_bank()
+  (SYSCFG FB_MODE), sent with uart_send_bytes(),
   CONFIRMED (no trial exists before piece 6)
 end note
 sm -> port : send(INFO frame)

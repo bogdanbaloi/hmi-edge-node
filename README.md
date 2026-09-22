@@ -69,9 +69,10 @@ on a host PC:
 
 | Layer | Files | Job |
 | --- | --- | --- |
-| HAL / BSP | `core`, `board`, `uart`, `adc`, `ota_board`, `registers.h` | the only code that touches registers |
-| App | `telemetry`, `temperature`, `ota_frame`, `ota_update`, `byte_ring` | pure logic: a button edge -> the frames, counts -> degrees, bytes -> update messages -> answers |
-| Composition | `main.c` | wires the HAL to the app and runs the loop |
+| HAL / BSP | `core`, `board`, `uart`, `adc`, `flash`, `registers.h` | the only code that touches registers |
+| App | `telemetry`, `temperature`, `ota_frame`, `ota_update` | pure logic: a button edge -> the frames, counts -> degrees, bytes -> update messages -> answers |
+| Utility | `byte_ring`, `crc16`, `le_bytes.h` | pure building blocks with no dependency, used by either layer: `uart` queues received bytes in `byte_ring` |
+| Composition | `main.c`, `ota_port` | wires the HAL to the app and runs the loop |
 
 `telemetry` depends on injected function pointers (a temperature reader and a
 line sink), so a host test drives it with a fake reader and a capturing sink.
@@ -397,11 +398,16 @@ mode mask; they have names now, and the binary shows the same stores in the
 same order, `AFRL` before `MODER`.
 
 What the board can do after this piece: answer `INFO_REQ` for real, with its
-version and the bank it runs from, read from `SYSCFG`. What it refuses:
+version and the bank it runs from, read from `SYSCFG` by the `flash` driver.
+The port that joins the drivers to the state machine, `ota_port`, sits in the
+composition layer and touches no register: the first draft put it in the HAL,
+where it included the state machine's types, the same inversion the `adc`
+section above rules out, and the layering check before the commit caught it.
+What it refuses:
 everything that writes flash. Erasing, programming, switching banks and
 confirming answer failure until pieces 5 to 7, so `BEGIN` gets
 `NAK FLASH_ERROR`. A board that claimed an update worked when nothing was
-written would be worse than one that says it cannot yet. Receiving costs 460
+written would be worse than one that says it cannot yet. Receiving costs 476
 bytes of code and 840 of RAM, most of it the 512-byte queue and the parser's
 frame buffer.
 

@@ -21,7 +21,8 @@
 #include "board.h"
 #include "byte_ring.h"
 #include "core.h"
-#include "ota_board.h"
+#include "flash.h"
+#include "ota_port.h"
 #include "ota_frame_parser.h"
 #include "ota_update.h"
 #include "telemetry.h"
@@ -84,7 +85,7 @@ static void ota_poll(void) {
 
 int main(void) {
     board_init();
-    ota_board_init();
+    flash_init();
     ota_frame_parser_init(&g_parser);
     uart_init();
     adc_temp_init();
@@ -97,7 +98,7 @@ int main(void) {
 
     telemetry_state_t state;
     telemetry_init(&state);
-    ota_update_init(&g_update, ota_board_port());
+    ota_update_init(&g_update, ota_port());
 
     for (;;) {
         /* Nothing here stalls. Debouncing is a decision telemetry makes from
