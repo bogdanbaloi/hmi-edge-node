@@ -4,6 +4,7 @@
  */
 
 #include "ota_port.h"
+#include "confirm_record.h"
 #include "core.h"
 #include "crc32.h"
 #include "crc_unit.h"
@@ -29,10 +30,9 @@ static void send(void *ctx, const uint8_t *bytes, size_t len) {
  * The driver names the bank the way ST does; the protocol's numbers are
  * mapped here, in the one place that knows both.
  *
- * The state is CONFIRMED for now, on purpose. Until piece 6 there is no trial
- * at all: the only image is the one the ST-Link wrote, nothing can roll it
- * back, and nothing waits for a CONFIRM. Reporting TRIAL would ask the host
- * for a confirmation that nothing on the board would act on.
+ * The state comes from the record in flash, not from a variable in RAM: a
+ * variable would say CONFIRMED again after every reset, which is exactly the
+ * mistake the record exists to prevent.
  */
 static void running(void *ctx, ota_running_t *out) {
     (void)ctx;
@@ -40,7 +40,10 @@ static void running(void *ctx, ota_running_t *out) {
     out->active_bank = (flash_running_bank() == FLASH_BANK_2)
                            ? (uint8_t)OTA_BANK_2
                            : (uint8_t)OTA_BANK_1;
-    out->image_state = (uint8_t)OTA_IMAGE_CONFIRMED;
+    out->image_state = (confirm_record_confirms(flash_confirm_record(),
+                                                OTA_PORT_FIRMWARE_VERSION) != 0U)
+                           ? (uint8_t)OTA_IMAGE_CONFIRMED
+                           : (uint8_t)OTA_IMAGE_TRIAL;
 }
 
 /// One mass erase of the spare bank, about 24.59 ms at worst.
@@ -78,10 +81,14 @@ static ota_io_t select_new_bank(void *ctx) {
     return OTA_IO_FAILED;
 }
 
-/// Piece 6 writes the CONFIRMED record. Until then, nothing is recorded.
+/// Keeps the running image: writes the record that says so. Repeating it is
+/// harmless, because a record already in place is left alone.
 static ota_io_t confirm(void *ctx) {
     (void)ctx;
-    return OTA_IO_FAILED;
+    uint8_t record[FLASH_WRITE_BYTES];
+    confirm_record_build(record, OTA_PORT_FIRMWARE_VERSION);
+    return (flash_write_confirm_record(record) == FLASH_OK) ? OTA_IO_OK
+                                                            : OTA_IO_FAILED;
 }
 
 /// Piece 7. Unreachable before it: a reset follows only an accepted COMMIT.

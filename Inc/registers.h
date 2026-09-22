@@ -147,6 +147,27 @@
 /* CP10 and CP11, full access, 0b11 each at bits [21:20] and [23:22]. */
 #define SCB_CPACR_FPU_FULL     (0xFUL << 20)
 
+/* ---- IWDG: independent watchdog @ 0x40003000 (RM0351 Rev 9, section 36) -
+ * Clocked by the LSI, its own 32 kHz oscillator, so it keeps counting even if
+ * the main clock dies. Started by writing a key; after that it CANNOT be
+ * stopped, only fed. */
+#define IWDG_KR                REG32(0x40003000UL) /* keys go here           */
+#define IWDG_PR                REG32(0x40003004UL) /* prescaler              */
+#define IWDG_RLR               REG32(0x40003008UL) /* reload value           */
+#define IWDG_SR                REG32(0x4000300CUL) /* update in progress     */
+#define IWDG_KEY_START         0x0000CCCCUL        /* start counting         */
+#define IWDG_KEY_UNLOCK        0x00005555UL        /* allow PR and RLR       */
+#define IWDG_KEY_FEED          0x0000AAAAUL        /* reload, stay alive     */
+#define IWDG_PR_DIV256         6UL                 /* 110: LSI / 256         */
+#define IWDG_RLR_MAX           0x0FFFUL            /* 12-bit counter         */
+#define IWDG_SR_IDLE           0UL                 /* no update in progress  */
+
+/* ---- RCC clock control and status @ 0x40021094 ------------------------
+ * Says what caused the last reset, and clears those flags. */
+#define RCC_CSR                REG32(0x40021094UL)
+#define RCC_CSR_RMVF           (1UL << 23)         /* clear the reset flags  */
+#define RCC_CSR_IWDGRSTF       (1UL << 29)         /* the watchdog reset us  */
+
 /* ---- CRC calculation unit @ 0x40023000 (RM0351 Rev 9, section 15) ------
  * Its reset values are already the CRC-32 polynomial 0x04C11DB7 and the
  * initial value 0xFFFFFFFF, so only the bit reversals have to be set. The

@@ -31,6 +31,10 @@
 #define FLASH_SPARE_BASE (FLASH_RUNNING_BASE + FLASH_BANK_BYTES)
 /// Programming granularity: one double word, 64 bits (RM0351 section 3.3.7).
 #define FLASH_WRITE_BYTES 8U
+/// The last page of the running bank, kept for the CONFIRMED record. The
+/// linker stops the image before it (piece 4), so nothing else is there.
+#define FLASH_CONFIRM_BASE \
+    (FLASH_RUNNING_BASE + FLASH_BANK_BYTES - FLASH_PAGE_BYTES)
 
 /**
  * The two PHYSICAL banks, numbered as ST numbers them in RM0351.
@@ -101,5 +105,26 @@ flash_status_t flash_erase_spare(void);
  */
 flash_status_t flash_program_spare(uint32_t offset, const uint8_t *bytes,
                                    uint32_t len);
+
+/// The CONFIRMED record of the RUNNING image, for reading only. Its layout is
+/// confirm_record.h; whether it confirms anything is that module's question.
+const uint8_t *flash_confirm_record(void);
+
+/**
+ * @brief Write the CONFIRMED record of the running image.
+ *
+ * The one place this firmware writes the bank it is running from. The CPU
+ * stalls while the double word goes in, about 90 us at most (RM0351 section
+ * 3.3.5), which is why it happens while answering CONFIRM and never while
+ * image bytes are arriving.
+ *
+ * Writing over an already written record would set PROGERR, so a record that
+ * is already there is left alone: CONFIRM repeated is CONFIRM once, which is
+ * the idempotency the protocol asks for.
+ *
+ * @return ::FLASH_OK, or ::FLASH_FAILED with the controller's error flags.
+ */
+flash_status_t flash_write_confirm_record(
+    const uint8_t record[FLASH_WRITE_BYTES]);
 
 #endif /* FLASH_H */

@@ -36,6 +36,10 @@ const uint32_t *flash_spare_words(void) {
     return (const uint32_t *)FLASH_SPARE_BASE;
 }
 
+const uint8_t *flash_confirm_record(void) {
+    return (const uint8_t *)FLASH_CONFIRM_BASE;
+}
+
 static void wait_while_busy(void) {
     while ((FLASH_SR & FLASH_SR_BSY) != 0U) {
     }
@@ -116,6 +120,28 @@ static flash_status_t program_double_word(uint32_t address,
 
     const flash_status_t status = status_after_operation();
     FLASH_CR &= ~FLASH_CR_PG;
+    return status;
+}
+
+/// Erased flash reads as all ones, so this is what "nothing written yet"
+/// looks like in one byte.
+#define FLASH_ERASED_BYTE 0xFFU
+
+flash_status_t flash_write_confirm_record(
+    const uint8_t record[FLASH_WRITE_BYTES]) {
+    const uint8_t *existing = flash_confirm_record();
+    for (uint32_t i = 0U; i < FLASH_WRITE_BYTES; i++) {
+        if (existing[i] != FLASH_ERASED_BYTE) {
+            return FLASH_OK;  /* already written, and writing twice fails */
+        }
+    }
+
+    wait_while_busy();
+    unlock();
+    const flash_status_t status = program_double_word(FLASH_CONFIRM_BASE,
+                                                      record);
+    lock();
+    flush_data_cache();
     return status;
 }
 

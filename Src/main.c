@@ -30,6 +30,7 @@
 #include "telemetry.h"
 #include "temperature.h"
 #include "uart.h"
+#include "watchdog.h"
 
 #include <stdint.h>
 
@@ -104,10 +105,16 @@ int main(void) {
     telemetry_init(&state);
     ota_update_init(&g_update, ota_port());
 
+    /* Last, and never undone: from here the board reboots unless the loop
+       keeps running. Started after the drivers so a hang during start-up
+       cannot hide behind a watchdog that was not counting yet. */
+    watchdog_start();
+
     for (;;) {
         /* Nothing here stalls. Debouncing is a decision telemetry makes from
            the clock, not a delay this loop sits through, so the processor
            stays free for whatever gets added next. */
+        watchdog_feed();
         ota_poll();
         if (ota_update_in_session(&g_update)) {
             continue;  /* section 5: no telemetry during an update */

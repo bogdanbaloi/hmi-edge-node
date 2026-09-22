@@ -12,14 +12,15 @@
  * itself. It sits here, and not in a driver, because a driver that knew the
  * port type would make the HAL depend on application code.
  *
- * **What is real today (piece 3 of 7):** the clock, sending, and INFO. The
- * board answers INFO_REQ with its version and the bank it runs from.
+ * **What is real today (piece 6 of 7):** the clock, sending, INFO with the
+ * real image state, erasing and programming the spare bank, verifying it, and
+ * CONFIRM, which writes the record that keeps the running image.
  *
- * **What is refused, honestly, until its piece lands:** erasing and
- * programming the inactive bank (piece 5), confirming (piece 6), switching
- * banks and resetting (piece 7). Each returns a failure, so BEGIN is answered
- * NAK FLASH_ERROR. A board that claimed an update worked when nothing was
- * written would be worse than one that says it cannot yet.
+ * **What is refused, honestly, until piece 7:** switching banks and the reset
+ * that follows it. So a full session ends at COMMIT with NAK FLASH_ERROR,
+ * after the image has been written and verified. A board that claimed an
+ * update worked when it cannot yet switch would be worse than one that says
+ * so.
  */
 
 /**
