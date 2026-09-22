@@ -22,3 +22,6 @@
 /tests/contract_frame_test
 /tests/temperature_test
 /tests/*.exe
+
+# Serial monitor logs (local, one file per session)
+/logs/

@@ -324,6 +324,28 @@ mounts as a mass-storage drive, so a `.bin` can be flashed by drag-and-drop.
 `serial-monitor.bat` opens a live serial monitor on COM3 @ 115200 (pass another
 port as an argument). Press the button and watch the frames stream.
 
+Every line carries the time it reached the PC, and the same lines are saved to
+`logs/serial-<date>-<time>.log` (ignored by git), so a session can be read or
+shared afterwards:
+
+```
+14:02:11.482  [FF FE 00 FF F8]   (no line end)
+14:02:13.910  equipment/0/state,on
+14:02:13.910  temp,23.6
+```
+
+Any byte that is not printable ASCII is shown as hex in brackets, never hidden.
+The first line above is the shape a press of the black reset button produces: a
+few bytes with no line end, printed on a line of their own. The byte values in
+the example are illustrative. The real ones are whatever your log shows.
+
+That separation is deliberate. The first version of the monitor read whole
+lines as ASCII. Every byte above `0x7F` became `?`, and bytes with no line end
+waited for the next `\n`, so reset noise was shown glued to the front of the
+next frame, seconds later, as `?????equipment/0/state,on`. From that output
+alone there was no way to tell what arrived, or when. `docs/uml/serial-monitor.puml`
+shows how the two cases are told apart now.
+
 ## Docs
 
 - API reference: `doxygen docs/Doxyfile` (output in `build/doxygen/html`).
@@ -335,3 +357,4 @@ port as an argument). Press the button and watch the frames stream.
 - Debounce (a decision about time, not a pause): `docs/uml/debounce.puml`.
 - FPU (the two switches, and what happens if you flip only one): `docs/uml/fpu-enable.puml`.
 - Fault signal (what the board does instead of going quiet): `docs/uml/fault-signal.puml`.
+- Serial monitor (reset noise versus a real frame, before and after): `docs/uml/serial-monitor.puml`.
