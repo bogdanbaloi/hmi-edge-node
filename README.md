@@ -371,8 +371,10 @@ apart are one line, so a reset followed at once by a press shows as
 its own. And bytes sent while no monitor has the port open are held somewhere
 between the ST-Link and the PC and delivered together when one opens, which is
 most likely how three resets made before a session showed up as a single
-`[FF FF FF]`. Count bytes, not lines: counting lines is how an earlier
-version of this README said 35 resets where the logs held 46.
+`[FF FF FF]`. Count bytes, not lines, and read every log. This README first
+said 35 resets, from one session never read and one count made by eye. A
+line count then said 43, because `[FF FF FF]` holds three bytes on one line.
+The logs held 46.
 
 ## Docs
 
