@@ -1,0 +1,50 @@
+@startuml trial-and-confirm
+' The life of an image on the board: trial, confirmation, and the watchdog
+' that reboots a board which stops making progress. Grounded in
+' Src/watchdog.c, Src/confirm_record.c, Src/flash.c (flash_write_confirm_record),
+' Src/ota_port.c and uart-flash-v1.md section 9, answers 4 and 5.
+
+title An image on trial, and what makes it permanent
+
+skinparam shadowing false
+
+[*] --> Running
+
+state Running {
+  state "On trial" as Trial
+  state "Confirmed" as Confirmed
+
+  [*] --> Trial : no record in the last page\nof the running bank
+  [*] --> Confirmed : the record is there\nAND names this version
+  Trial --> Confirmed : CONFIRM\n/ write the record, ACK
+  Confirmed --> Confirmed : CONFIRM again\n/ record already there, ACK
+}
+
+note right of Running
+  The state is READ FROM FLASH on every INFO_REQ,
+  never kept in RAM: a variable would say CONFIRMED
+  again after each reset, which is the mistake the
+  record exists to prevent. No record means
+  unconfirmed (spec section 9, answer 4).
+end note
+
+note bottom of Trial
+  **What erases a record**
+  A mass erase of a bank takes that bank's record with it,
+  which is right: the image it belonged to is being replaced.
+  A power cut in the middle of the one double word leaves a
+  half record, and a half record confirms nothing: the marker
+  and the version are both checked.
+end note
+
+note top of Running
+  **The watchdog runs in both states** (Bogdan, 2026-09-22).
+  Started last at start-up and never stopped, fed every pass of
+  the main loop, period about 32.8 s. It answers the failure the
+  fault handler cannot: code that does not crash but stops making
+  progress. A board stuck in the fault handler reboots after
+  about 32 s instead of blinking forever.
+  Rolling back to the other bank is the bank switch, piece 7.
+end note
+
+@enduml

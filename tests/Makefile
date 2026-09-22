@@ -18,9 +18,10 @@ UPDATE_SRC   := ota_update_test.c ../Src/ota_update.c ../Src/ota_frame.c \
                 ../Src/crc16.c
 RING_SRC     := byte_ring_test.c ../Src/byte_ring.c
 CRC32_SRC    := crc32_test.c ../Src/crc32.c
+RECORD_SRC   := confirm_record_test.c ../Src/confirm_record.c
 
 TARGETS := contract_frame_test temperature_test fault_test ota_frame_test \
-           ota_update_test byte_ring_test crc32_test
+           ota_update_test byte_ring_test crc32_test confirm_record_test
 
 .PHONY: all run clean
 
@@ -63,6 +64,11 @@ byte_ring_test: $(RING_SRC) ../Inc/byte_ring.h ../Inc/ota_frame.h
 crc32_test: $(CRC32_SRC) ../Inc/crc32.h
 	$(CC) $(CFLAGS) -o $@ $(CRC32_SRC)
 
+# The record that says an image is kept, and every way flash can fail to say
+# it: erased, zeroed, corrupted, or left behind by an older image.
+confirm_record_test: $(RECORD_SRC) ../Inc/confirm_record.h ../Inc/le_bytes.h
+	$(CC) $(CFLAGS) -o $@ $(RECORD_SRC)
+
 run: $(TARGETS)
 	./contract_frame_test
 	./temperature_test
@@ -71,6 +77,7 @@ run: $(TARGETS)
 	./ota_update_test
 	./byte_ring_test
 	./crc32_test
+	./confirm_record_test
 
 clean:
 	rm -f $(TARGETS) $(addsuffix .exe,$(TARGETS))

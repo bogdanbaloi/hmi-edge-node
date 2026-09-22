@@ -69,9 +69,9 @@ on a host PC:
 
 | Layer | Files | Job |
 | --- | --- | --- |
-| HAL / BSP | `core`, `board`, `uart`, `adc`, `flash`, `crc_unit`, `registers.h` | the only code that touches registers |
+| HAL / BSP | `core`, `board`, `uart`, `adc`, `flash`, `crc_unit`, `watchdog`, `registers.h` | the only code that touches registers |
 | App | `telemetry`, `temperature`, `ota_frame`, `ota_update` | pure logic: a button edge -> the frames, counts -> degrees, bytes -> update messages -> answers |
-| Utility | `byte_ring`, `crc16`, `crc32`, `le_bytes.h` | pure building blocks with no dependency, used by either layer: `uart` queues received bytes in `byte_ring` |
+| Utility | `byte_ring`, `crc16`, `crc32`, `confirm_record`, `le_bytes.h` | pure building blocks with no dependency, used by either layer: `uart` queues received bytes in `byte_ring` |
 | Composition | `main.c`, `ota_port` | wires the HAL to the app and runs the loop |
 
 `telemetry` depends on injected function pointers (a temperature reader and a
@@ -210,8 +210,8 @@ mingw32-make -C tests run
 ```
 
 No board, no test framework, no dependency on the other repo. It compiles the
-pure-logic sources with the desktop compiler already on PATH. Seven binaries,
-seven different questions:
+pure-logic sources with the desktop compiler already on PATH. Eight binaries,
+eight different questions:
 
 ### `contract_frame_test`: does the wire format still match?
 
@@ -638,6 +638,47 @@ banks. With `-Corrupt` the same session must end in `NAK 06`, `VERIFY_FAILED`.
 The pair is the point: without the second run, a board that stored nothing
 could not be told from one that stored everything.
 
+### `confirm_record_test`: what counts as "this image is kept"?
+
+An image runs on trial until the host sends `CONFIRM`, and the spec says **no
+record means unconfirmed**. The record is therefore the only durable evidence,
+and it lives in the last 2 KB page of the running bank, the page the linker
+keeps free (piece 4).
+
+It is one double word: a marker, ASCII `CNFM`, and the version it confirms.
+Both are checked, which is what this test is about. Erased flash confirms
+nothing, a zeroed page confirms nothing, a record naming another version
+confirms nothing, and flipping any single bit of the eight bytes voids it,
+which is what a power cut in the middle of the write looks like. Seven
+mutants, all caught.
+
+The state is read from flash on every `INFO_REQ` and never kept in RAM: a
+variable would say `CONFIRMED` again after the next reset, which is exactly
+the mistake the record exists to prevent.
+
+### The watchdog, and the failure it is for
+
+The fault handler (above) answers a crash. The watchdog answers the other
+failure: code that does not crash but stops making progress, a loop waiting
+for something that will never arrive. Nothing blinks, nothing faults, the
+board just goes quiet.
+
+`watchdog` starts the IWDG at its longest period, about 32.8 s, and the main
+loop feeds it every pass. Three things decide how it is used
+(RM0351 Rev 9, section 36):
+
+- it runs from the LSI, its own 32 kHz oscillator, so a dead main clock does
+  not stop it;
+- **once started it cannot be stopped**, so it is started last, after the
+  drivers, and never before something long-running;
+- the window option stays off, because with a window, feeding too *early*
+  also resets the board.
+
+It runs in the `CONFIRMED` state too, not only during a trial: a board stuck
+in the fault handler reboots after about 32 s instead of blinking forever.
+That was Bogdan's call on 2026-09-22. `docs/uml/trial-and-confirm.puml` has
+the whole life of an image.
+
 ## Ask the board what it runs
 
 `ota-info.ps1` sends one `INFO_REQ` and shows every byte that comes back. It
@@ -682,3 +723,4 @@ checksum, sent outside a session, got no answer at all, as section 6 says.
 - OTA receive path (one frame from the wire through the interrupt to the answer): `docs/uml/ota-uart-rx.puml`.
 - Flash map (one image per bank, and the page it must not touch): `docs/uml/flash-map.puml`.
 - Flash write (unlock, erase, program, and what each refusal means): `docs/uml/flash-write.puml`.
+- Trial and confirmation (what makes an image permanent, and the watchdog): `docs/uml/trial-and-confirm.puml`.
