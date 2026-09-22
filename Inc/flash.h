@@ -31,10 +31,13 @@
 #define FLASH_SPARE_BASE (FLASH_RUNNING_BASE + FLASH_BANK_BYTES)
 /// Programming granularity: one double word, 64 bits (RM0351 section 3.3.7).
 #define FLASH_WRITE_BYTES 8U
+/// What a bank can hold of an image: everything except the last page, which
+/// is the CONFIRMED record. The same 522240 bytes the linker allows and the
+/// spec calls the TOO_LARGE limit, written once and used everywhere.
+#define FLASH_IMAGE_BYTES (FLASH_BANK_BYTES - FLASH_PAGE_BYTES)
 /// The last page of the running bank, kept for the CONFIRMED record. The
 /// linker stops the image before it (piece 4), so nothing else is there.
-#define FLASH_CONFIRM_BASE \
-    (FLASH_RUNNING_BASE + FLASH_BANK_BYTES - FLASH_PAGE_BYTES)
+#define FLASH_CONFIRM_BASE (FLASH_RUNNING_BASE + FLASH_IMAGE_BYTES)
 
 /**
  * The two PHYSICAL banks, numbered as ST numbers them in RM0351.
@@ -80,6 +83,18 @@ const uint8_t *flash_spare_image(void);
 /// word aligned, and the alignment lives HERE, in the one place that knows the
 /// address, instead of being re-derived from a byte pointer by a cast.
 const uint32_t *flash_spare_words(void);
+
+/// The RUNNING image as words, for checksumming what is executing now.
+const uint32_t *flash_running_words(void);
+
+/**
+ * @brief Bytes of flash the running image occupies, from the linker.
+ *
+ * Everything the linker loaded, code and the initial values of .data and
+ * .sram2, up to `k_firmware_image_end`. Two builds differ somewhere in that
+ * range, which is what lets a checksum over it tell them apart.
+ */
+uint32_t flash_image_bytes(void);
 
 /**
  * @brief Erase the whole spare bank, one mass erase (RM0351 section 3.3.6).

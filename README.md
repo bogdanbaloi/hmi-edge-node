@@ -645,12 +645,25 @@ record means unconfirmed**. The record is therefore the only durable evidence,
 and it lives in the last 2 KB page of the running bank, the page the linker
 keeps free (piece 4).
 
-It is one double word: a marker, ASCII `CNFM`, and the version it confirms.
-Both are checked, which is what this test is about. Erased flash confirms
-nothing, a zeroed page confirms nothing, a record naming another version
-confirms nothing, and flipping any single bit of the eight bytes voids it,
-which is what a power cut in the middle of the write looks like. Seven
-mutants, all caught.
+It is one double word: a marker, ASCII `CNFM`, and **the checksum of the
+running image**, which is what identifies it. Both are checked, which is what
+this test is about. Erased flash confirms nothing, a zeroed page confirms
+nothing, a record naming another image confirms nothing, and flipping any
+single bit of the eight bytes voids it, which is what a power cut in the
+middle of the write looks like. Seven mutants, all caught.
+
+**The identity started as a version number and that was a bug**, found by a
+review on 2026-09-22 and proved on the board the same hour. The version is a
+constant in the source, the same in every build until somebody raises it, so a
+record written for one build confirmed the next one too. Flashing over ST-Link
+erases only the pages the image occupies, so the record page survived, and a
+brand new image answered `CONFIRMED` for a confirmation it never received. The
+identity is now a checksum over everything the linker loads, up to the symbol
+`k_firmware_image_end`, so it changes whenever the image does. Two consequences
+worth knowing: the state costs a checksum over the image on every `INFO_REQ`,
+about 9 KB today, and a record left by a different image makes `CONFIRM` answer
+`NAK FLASH_ERROR` rather than a hollow `ACK`, because the page cannot be
+rewritten without erasing it.
 
 The state is read from flash on every `INFO_REQ` and never kept in RAM: a
 variable would say `CONFIRMED` again after the next reset, which is exactly
