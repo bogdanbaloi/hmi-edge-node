@@ -21,6 +21,7 @@
 #include "crc16.h"
 
 /* Offsets inside a frame. */
+#define OFS_START   0U
 #define OFS_TYPE    1U
 #define OFS_SEQ     2U
 #define OFS_LEN     4U
@@ -29,13 +30,24 @@
 /// TYPE, SEQ and LEN: what the checksum covers besides the payload.
 #define HEADER_LEN 5U
 
+/* Little-endian, section 3: the low byte goes first. */
+#define LOW_BYTE_MASK   0xFFU
+#define HIGH_BYTE_SHIFT 8U
+
+/* Where seek_start() looks for the next 0xA5. The resync rule reads straight
+   off these two names: after a false start the search resumes at the byte
+   AFTER it, and after a good frame it starts at whatever came next. */
+#define AFTER_FALSE_START 1U
+#define FROM_FIRST_BYTE   0U
+
 static uint16_t read_le16(const uint8_t *p) {
-    return (uint16_t)((uint16_t)p[0] | (uint16_t)((uint16_t)p[1] << 8));
+    return (uint16_t)((uint16_t)p[0] |
+                      (uint16_t)((uint16_t)p[1] << HIGH_BYTE_SHIFT));
 }
 
 static void write_le16(uint8_t *p, uint16_t value) {
-    p[0] = (uint8_t)(value & 0xFFU);
-    p[1] = (uint8_t)(value >> 8);
+    p[0] = (uint8_t)(value & LOW_BYTE_MASK);
+    p[1] = (uint8_t)(value >> HIGH_BYTE_SHIFT);
 }
 
 /// Forgets the first n bytes of the candidate.
@@ -88,7 +100,7 @@ static void process(ota_frame_parser_t *parser, ota_frame_sink_t sink,
         const uint16_t len = read_le16(&parser->raw[OFS_LEN]);
         if (len > OTA_FRAME_MAX_PAYLOAD) {
             /* False start. Resume from the byte after it, never skip LEN. */
-            seek_start(parser, 1U);
+            seek_start(parser, AFTER_FALSE_START);
             continue;
         }
         const uint16_t total = (uint16_t)(OTA_FRAME_OVERHEAD + len);
@@ -97,9 +109,9 @@ static void process(ota_frame_parser_t *parser, ota_frame_sink_t sink,
         }
         if (deliver(parser, len, sink, ctx) == OTA_FRAME_OK) {
             drop_front(parser, total);
-            seek_start(parser, 0U);  /* skip anything between two frames */
+            seek_start(parser, FROM_FIRST_BYTE);  /* skip what lies between */
         } else {
-            seek_start(parser, 1U);  /* same resync as a bad LEN */
+            seek_start(parser, AFTER_FALSE_START);  /* same as a bad LEN */
         }
     }
 }
@@ -128,15 +140,15 @@ void ota_frame_feed(ota_frame_parser_t *parser, uint8_t byte,
 size_t ota_frame_encode(const ota_frame_t *frame, uint8_t *out,
                         size_t out_cap) {
     if (frame == NULL || out == NULL) {
-        return 0U;
+        return OTA_FRAME_ENCODE_REFUSED;
     }
     const uint16_t len = frame->len;
     const size_t total = (size_t)OTA_FRAME_OVERHEAD + len;
     if (len > OTA_FRAME_MAX_PAYLOAD || out_cap < total ||
         (len > 0U && frame->payload == NULL)) {
-        return 0U;
+        return OTA_FRAME_ENCODE_REFUSED;
     }
-    out[0] = OTA_FRAME_START;
+    out[OFS_START] = OTA_FRAME_START;
     out[OFS_TYPE] = frame->type;
     write_le16(&out[OFS_SEQ], frame->seq);
     write_le16(&out[OFS_LEN], len);

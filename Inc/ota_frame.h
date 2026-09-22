@@ -31,6 +31,9 @@
 #define OTA_FRAME_OVERHEAD    8U     ///< Start, TYPE, SEQ, LEN and CRC16.
 /// Largest frame on the wire, and the size of the parser's buffer.
 #define OTA_FRAME_MAX_SIZE    (OTA_FRAME_OVERHEAD + OTA_FRAME_MAX_PAYLOAD)
+/// What ::ota_frame_encode returns when it built nothing. No frame is empty,
+/// the smallest is ::OTA_FRAME_OVERHEAD bytes, so zero cannot be a real size.
+#define OTA_FRAME_ENCODE_REFUSED 0U
 
 /// How a finished frame turned out.
 typedef enum {
@@ -100,9 +103,9 @@ void ota_frame_feed(ota_frame_parser_t *parser, uint8_t byte,
  * analysis gate caps a function at five parameters, and four of these six are
  * the frame's own fields anyway.
  *
- * @return The frame's size in bytes, or 0 when frame or out is missing, len
- *         is above ::OTA_FRAME_MAX_PAYLOAD, out is too small, or a payload is
- *         missing.
+ * @return The frame's size in bytes, or ::OTA_FRAME_ENCODE_REFUSED when frame
+ *         or out is missing, len is above ::OTA_FRAME_MAX_PAYLOAD, out is too
+ *         small, or a payload is missing.
  */
 size_t ota_frame_encode(const ota_frame_t *frame, uint8_t *out,
                         size_t out_cap);

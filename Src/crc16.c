@@ -12,9 +12,16 @@
 #define CRC16_POLY    0x1021U
 #define CRC16_TOP_BIT 0x8000U
 
+/// Bits processed per input byte.
+#define BITS_PER_BYTE 8U
+
+/// Shift that lines a byte up with the top of the 16-bit register. This
+/// variant is not reflected, so each byte enters most significant bit first.
+#define BYTE_TO_TOP 8U
+
 uint16_t crc16_update(uint16_t crc, uint8_t byte) {
-    uint16_t c = (uint16_t)(crc ^ (uint16_t)((uint16_t)byte << 8));
-    for (uint32_t bit = 0U; bit < 8U; bit++) {
+    uint16_t c = (uint16_t)(crc ^ (uint16_t)((uint16_t)byte << BYTE_TO_TOP));
+    for (uint32_t bit = 0U; bit < BITS_PER_BYTE; bit++) {
         if ((c & CRC16_TOP_BIT) != 0U) {
             c = (uint16_t)((uint16_t)(c << 1) ^ CRC16_POLY);
         } else {
