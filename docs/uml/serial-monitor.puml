@@ -1,0 +1,71 @@
+@startuml serial-monitor
+' How the serial monitor tells reset noise apart from a real frame.
+' Grounded in serial-monitor.ps1 (Add-Bytes, Invoke-IdleFlush, Format-Bytes).
+
+title Reset noise and a real frame, before and after
+
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+
+participant "Nucleo\n(USART2 TX)" as B
+participant "ST-Link\n(USB VCP)" as S
+participant "Monitor\n(PC)" as M
+
+== Before: ReadLine, ASCII ==
+
+B -> S : black reset button, five times:\none 0xFF each, no line end
+S -> M : FF FF FF FF FF
+note right of M
+  ReadLine waits for '\n'.
+  Nothing is printed yet.
+end note
+... then the user presses the blue button ...
+B -> S : equipment/0/state,on\n
+S -> M : frame
+note right of M
+  One line, all at once:
+  ?????equipment/0/state,on
+  ASCII turned each 0xFF into '?',
+  so five resets looked like one
+  burst of noise inside the frame.
+end note
+
+== After: raw bytes, idle flush ==
+
+B -> S : black reset button:\none byte, 0xFF, no line end
+S -> M : FF, kept as a byte
+M -> M : quiet for 100 ms\n(IdleMs)
+note right of M
+  15:24:14.751  [FF]   (no line end)
+  Printed on its own line, under
+  the time it actually arrived.
+  Measured: 15 resets, 15 x 0xFF.
+end note
+... 219 ms later, the user presses the blue button ...
+B -> S : equipment/0/state,on\n
+S -> M : frame
+note right of M
+  15:24:14.970  equipment/0/state,on
+  Clean, under its own time.
+end note
+
+== Why 100 ms does not split a real frame ==
+
+B -> S : equipment/0/state,off\n
+S -> M : first USB chunk: equipment/0/st
+S -> M : second chunk, 3 ms later: ate,off\n
+note right of M
+  3 ms < 100 ms, so the two chunks
+  are joined into one line.
+  A 21-byte frame takes about 2 ms
+  on the wire at 115200 baud.
+end note
+
+legend bottom
+  Every [..] is raw bytes in hex. A literal '[' or ']' in the data is
+  shown as [5B] or [5D], and the monitor's own notes use round brackets,
+  like (connected), so square brackets can never be misread.
+  Times are when the PC received the bytes, not when the board sent them.
+endlegend
+
+@enduml

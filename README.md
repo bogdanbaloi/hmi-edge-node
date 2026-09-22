@@ -324,6 +324,33 @@ mounts as a mass-storage drive, so a `.bin` can be flashed by drag-and-drop.
 `serial-monitor.bat` opens a live serial monitor on COM3 @ 115200 (pass another
 port as an argument). Press the button and watch the frames stream.
 
+Every line carries the time it reached the PC, and the same lines are saved to
+`logs/serial-<date>-<time>.log` (ignored by git), so a session can be read or
+shared afterwards:
+
+```
+15:24:14.751  [FF]   (no line end)
+15:24:14.970  equipment/0/state,on
+15:24:14.970  temp,23.6
+```
+
+That is a real capture. Any byte that is not printable ASCII is shown as hex in
+square brackets, never hidden, and square brackets mean nothing else: the
+monitor's own notes, like `(no line end)`, use round ones.
+
+The first line is a press of the black reset button. Measured on 2026-09-22,
+**every reset puts exactly one byte on the line, `0xFF`**: 15 resets, 15 bytes,
+no other value, and every frame after them arrived clean.
+
+That separation is deliberate, and it is what made the measurement possible.
+The first version of the monitor read whole lines as ASCII. Every byte above
+`0x7F` became `?`, and bytes with no line end waited for the next `\n`, so
+several resets in a row were shown glued to the front of the next frame as
+`?????equipment/0/state,on`. That looked like one reset producing a burst of
+random noise. Given the new capture, it was most likely five resets, one `0xFF`
+each: the old output cannot be replayed to prove it. `docs/uml/serial-monitor.puml`
+shows how the two cases are told apart now.
+
 ## Docs
 
 - API reference: `doxygen docs/Doxyfile` (output in `build/doxygen/html`).
@@ -335,3 +362,4 @@ port as an argument). Press the button and watch the frames stream.
 - Debounce (a decision about time, not a pause): `docs/uml/debounce.puml`.
 - FPU (the two switches, and what happens if you flip only one): `docs/uml/fpu-enable.puml`.
 - Fault signal (what the board does instead of going quiet): `docs/uml/fault-signal.puml`.
+- Serial monitor (reset noise versus a real frame, before and after): `docs/uml/serial-monitor.puml`.
