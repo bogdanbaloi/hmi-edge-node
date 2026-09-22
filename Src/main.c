@@ -21,6 +21,7 @@
 #include "board.h"
 #include "byte_ring.h"
 #include "core.h"
+#include "crc32.h"
 #include "flash.h"
 #include "ota_port.h"
 #include "ota_frame_parser.h"
@@ -86,6 +87,7 @@ static void ota_poll(void) {
 int main(void) {
     board_init();
     flash_init();
+    crc32_init();
     ota_frame_parser_init(&g_parser);
     uart_init();
     adc_temp_init();
