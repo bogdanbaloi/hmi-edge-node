@@ -1,0 +1,61 @@
+@startuml ota-frame
+' The UART flash protocol envelope: how one received byte is handled.
+' Grounded in Src/ota_frame.c (ota_frame_parser_feed, process, seek_start)
+' and in industrial-hmi docs/protocols/uart-flash-v1.md, sections 3 and 9 item 8.
+
+title One byte in: the frame parser and the resync rule
+
+skinparam shadowing false
+
+start
+:byte arrives from the UART;
+if (candidate empty?) then (yes)
+  if (byte == 0xA5?) then (no)
+    :drop it\n(telemetry text, the reset 0xFF, noise);
+    stop
+  endif
+endif
+:append to the candidate;
+repeat
+  if (6 bytes held?) then (no)
+    :wait for more;
+    stop
+  endif
+  if (LEN > 260?) then (yes)
+    #FFE0E0:false start:\nresume from the byte AFTER the 0xA5,\nre-scanning bytes already held;
+  else (no)
+    if (8 + LEN bytes held?) then (no)
+      :wait for the body;
+      stop
+    endif
+    if (CRC-16 of TYPE..PAYLOAD\n== the two bytes after it?) then (yes)
+      #E0FFE0:sink(OK);
+      :drop the frame,\nskip to the next 0xA5;
+    else (no)
+      #FFE0E0:sink(BAD_CRC);
+      :same resync:\nresume from the byte AFTER the 0xA5;
+    endif
+  endif
+repeat while (bytes left in the candidate?)
+stop
+
+note right
+  **Never skip LEN bytes.**
+  A garbage 0xA5 can carry a garbage LEN
+  up to 65535. Waiting for it, or jumping
+  past it, swallows the real frames behind.
+  Resuming from the next byte finds a real
+  frame even inside a false frame's body.
+
+  **A loop, not recursion.** Each false start
+  shifts the candidate in place and the loop
+  runs again. Recursing would nest up to ~268
+  calls, each with its own copy of the bytes.
+
+  **Pinned to the other side.** The host test
+  reproduces the spec's CRC check value 0x29B1
+  and its two worked frames byte for byte:
+  A5 01 01 00 00 00 E9 CD  and  A5 82 01 00 00 00 EB 01.
+end note
+
+@enduml

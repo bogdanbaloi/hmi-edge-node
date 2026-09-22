@@ -209,8 +209,8 @@ mingw32-make -C tests run
 ```
 
 No board, no test framework, no dependency on the other repo. It compiles the
-pure-logic sources with the desktop compiler already on PATH. Three binaries,
-three different questions:
+pure-logic sources with the desktop compiler already on PATH. Four binaries,
+four different questions:
 
 ### `contract_frame_test`: does the wire format still match?
 
@@ -263,6 +263,58 @@ blinking light.
 The kinds live in a table rather than four separate assertions, so a fifth
 fault vector added later has to be added there too, and the properties still
 have to hold for it.
+
+### `ota_frame_test`: do both sides of the update link build the same bytes?
+
+The start of the over-the-air update chain: industrial-hmi writes an update
+agent that flashes this board over the same serial cable, through a framed
+binary protocol both repos own, `docs/protocols/uart-flash-v1.md` in
+industrial-hmi (status AGREED, 2026-09-22). This binary tests the envelope,
+`Src/ota_frame.c`, and it is a contract test in the same shape as the telemetry
+one: its anchors are copied verbatim from the spec, not derived from this code.
+
+The module has two headers on purpose. `ota_frame.h` holds the frame layout
+and the encoder, which is all a sender needs. `ota_frame_parser.h` holds the
+parser. Code that only transmits, like the ACK and NAK path, includes the first
+alone and cannot even name the parser: a file that tries fails to compile,
+checked once by hand. The parser's verdict on a frame, good or bad checksum,
+travels beside the frame to the sink instead of inside it, so a sender is not
+handed a field it would have to ignore.
+
+| Anchor, from the spec | Why it is enough |
+| --- | --- |
+| CRC-16/CCITT-FALSE over `123456789` is `0x29B1` | several CRC-16s share the polynomial, and only the right one gives this |
+| `A5 01 01 00 00 00 E9 CD`, INFO_REQ number 1 | pins the start byte, the byte order, and what the checksum covers |
+| `A5 82 01 00 00 00 EB 01`, its ACK | the same, from the board's side |
+
+The checksum covers TYPE to PAYLOAD and never the `0xA5`; including it gives
+`DC 70` instead of `E9 CD`, so a wrong reading of the spec cannot pass.
+
+The rest is the parser on a noisy line, which is where it would really fail.
+Bytes before a frame are skipped, including the reset `0xFF` measured on this
+board. And the resync rule, section 9 item 8 of the spec: a random `0xA5` is a
+false start, shown by a length over 260 or a bad checksum, and the parser then
+resumes from the byte AFTER it, re-scanning bytes it already holds. It never
+skips `LEN` bytes, because a garbage `LEN` can reach 65535 and swallow the real
+frames behind it. One test hides a real frame inside a false frame's body and
+checks it still comes out.
+
+Eight mutants, each a realistic mistake, are each caught by a named test:
+checksum over the start byte, checksum read big-endian, skipping `LEN` after a
+bad checksum, the length limit off by one, throwing a false start away whole
+instead of resuming after it, not skipping leftovers after a frame, resuming
+two bytes after a false start instead of one, and the checksum verdict
+inverted. The mutation run also caught a bug in the test itself: one
+assertion read the last captured frame at index `count - 1` with `count` at
+zero, the binary crashed, the crash threw away the buffered failure lines, and
+a killed mutant was first reported as surviving. `docs/uml/ota-frame.puml` has
+the parser's flow.
+
+On the board the two modules cost 510 bytes of code (64 for the CRC, 446 for
+the parser), and the linked image grew by 592. No RAM yet: nothing on the
+board creates a parser so far. One will take 270 bytes, a whole frame kept
+raw, because the resync rule needs the bytes back.
+
 ## CI
 
 Every push and every pull request runs four jobs, none of which needs a board:
@@ -389,3 +441,4 @@ The logs held 46.
 - Fault signal (what the board does instead of going quiet): `docs/uml/fault-signal.puml`.
 - Serial monitor (reset noise versus a real frame, before and after): `docs/uml/serial-monitor.puml`.
 - UART pin order (one 0xFF per reset, and the two-line fix): `docs/uml/uart-pin-order.puml`.
+- OTA frame parser (one byte in, the resync rule): `docs/uml/ota-frame.puml`.
