@@ -569,6 +569,20 @@ check. That check runs at start-up: the unit computes the CRC of `123456789`
 and must produce `0xCBF43926`. A misconfigured unit would otherwise fail every
 `COMMIT` on a perfectly good image, and blame the image.
 
+Three measurements of the same 64 KB verify, each on the board, each the time
+between `COMMIT` leaving the PC and the answer arriving:
+
+| How the image is fed to the CRC | 64 KB | extrapolated to 510 KB |
+| --- | --- | --- |
+| software, table in RAM | 572 ms | about 4.6 s |
+| peripheral, each word built from four bytes | 245 ms | about 1.95 s |
+| peripheral, words read straight from flash | **91 ms** | **about 0.73 s** |
+
+The middle row is the interesting one: the peripheral alone was not enough,
+because at `-O0` the loop that assembled each word cost more than the CRC did.
+An image in flash starts at a bank boundary, so it is word aligned and every
+word is one load. These are Debug (`-O0`) numbers; the CI build is `-O1`.
+
 ### Writing the other bank
 
 The fifth OTA piece is the flash driver, and it is the first code that writes
