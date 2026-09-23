@@ -1,0 +1,29 @@
+# raw serial capture, COM3 @ 115200 8N1, 2026-09-23 14:13:40
+# one line per burst of bytes: time, direction, hex, then the printable rendering
+14:13:41.297  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F  |equipment/0/|   # CUT BY HAND here, see the header
+14:13:41.337  RX  73 74 61 74 65 2C 6F 6E 0A 74 65 6D 70 2C 32 34 2E 38 0A  |state,on\ntemp,24.8\n|   # the rest of the same line, 40 ms later
+14:13:41.804  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F 73 74 61 74 65 2C 6F 66 66 0A 74 65 6D 70 2C 32 34 2E 30 0A  |equipment/0/state,off\ntemp,24.0\n|
+14:13:42.311  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F 73 74 61 74 65 2C 6F 6E 0A 74 65 6D 70 2C 32 34 2E 34 0A  |equipment/0/state,on\ntemp,24.4\n|
+14:13:42.821  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F 73 74 61 74 65 2C 6F 66 66 0A 74 65 6D 70 2C 32 34 2E 30 0A  |equipment/0/state,off\ntemp,24.0\n|
+14:13:43.332  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F 73 74 61 74 65 2C 6F 6E 0A 74 65 6D 70 2C 32 34 2E 38 0A  |equipment/0/state,on\ntemp,24.8\n|
+14:13:43.953  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F 73 74 61 74 65 2C 6F 66 66 0A 74 65 6D 70 2C 32 34 2E 34 0A  |equipment/0/state,off\ntemp,24.4\n|
+14:13:44.455  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F 73 74 61 74 65 2C 6F 6E 0A 74 65 6D 70 2C 32 34 2E 34 0A  |equipment/0/state,on\ntemp,24.4\n|
+14:13:44.780  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F 73 74 61 74 65 2C 6F 66 66 0A 74 65 6D 70 2C 32 34 2E 30 0A  |equipment/0/state,off\ntemp,24.0\n|
+14:13:45.105  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F 73 74 61 74 65 2C 6F 6E 0A 74 65 6D 70 2C 32 34 2E 34 0A  |equipment/0/state,on\ntemp,24.4\n|
+14:13:45.384  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F 73 74 61 74 65 2C 6F 66 66 0A 74 65 6D 70 2C 32 34 2E 34 0A  |equipment/0/state,off\ntemp,24.4\n|
+14:13:45.570  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F 73 74 61 74 65 2C 6F 6E 0A 74 65 6D 70 2C 32 34 2E 34 0A  |equipment/0/state,on\ntemp,24.4\n|
+14:13:45.790  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F 73 74 61 74 65 2C 6F 66 66 0A 74 65 6D 70 2C 32 34 2E 34 0A  |equipment/0/state,off\ntemp,24.4\n|
+14:13:46.863  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F 73 74 61 74 65 2C 6F 6E 0A 74 65 6D 70 2C 32 34 2E 34 0A  |equipment/0/state,on\ntemp,24.4\n|
+14:13:46.992  TX  A5 01 01 00 00 00 E9 CD  |........|
+14:13:47.050  RX  A5 81 01 00 06 00 01 00 00 00 01 00 F3 1C  |..............|
+14:13:47.113  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F 73 74 61 74 65 2C 6F 66 66 0A 74 65 6D 70 2C 32 34 2E 30 0A  |equipment/0/state,off\ntemp,24.0\n|
+14:13:47.284  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F 73 74 61 74 65 2C 6F 6E 0A 74 65 6D 70 2C 32 34 2E 34 0A  |equipment/0/state,on\ntemp,24.4\n|
+14:13:47.472  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F 73 74 61 74 65 2C 6F 66 66 0A 74 65 6D 70 2C 32 34 2E 34 0A  |equipment/0/state,off\ntemp,24.4\n|
+14:13:47.656  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F 73 74 61 74 65 2C 6F 6E 0A 74 65 6D 70 2C 32 34 2E 34 0A  |equipment/0/state,on\ntemp,24.4\n|
+14:13:47.797  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F 73 74 61 74 65 2C 6F 66 66 0A 74 65 6D 70 2C 32 33 2E 36 0A  |equipment/0/state,off\ntemp,23.6\n|
+14:13:47.980  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F 73 74 61 74 65 2C 6F 6E 0A 74 65 6D 70 2C 32 34 2E 34 0A  |equipment/0/state,on\ntemp,24.4\n|
+14:13:48.150  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F 73 74 61 74 65 2C 6F 66 66 0A 74 65 6D 70 2C 32 34 2E 34 0A  |equipment/0/state,off\ntemp,24.4\n|
+14:13:48.319  RX  65 71 75 69 70 6D 65 6E 74 2F 30 2F 73 74 61 74 65 2C 6F 6E 0A 74 65 6D 70 2C 32 33 2E 36 0A  |equipment/0/state,on\ntemp,23.6\n|
+14:13:53.005  TX  A5 01 02 00 00 00 00 00  |........|
+14:13:59.032  TX  A5 01 03 00 00 00 81 20  |....... |
+14:13:59.078  RX  A5 81 03 00 06 00 01 00 00 00 01 00 79 C2  |............y.|
