@@ -49,3 +49,44 @@ is a fair way to build that case from this capture.
 mistaken for the start of a telemetry line. The checksum is CRC-16/CCITT-FALSE
 over TYPE..PAYLOAD, never over the `A5`, little-endian on the wire. The worked
 example in the spec is `A5 01 01 00 00 00 E9 CD`, the first frame sent here.
+
+# A whole update session, and one line cut in two
+
+Two more files, added the same day for the same reason: a benchmark task built
+on this protocol needs traffic that really happened.
+
+## `update-session-capture.txt`
+
+A complete session recorded with `capture-update-session.ps1`, after a stretch
+of telemetry produced by pressing the button, so the update and the telemetry
+share the wire in one file. What it shows, in order:
+
+| Sent | Answered | Why it is in here |
+| --- | --- | --- |
+| `INFO_REQ` | `INFO` | the board says which version and bank it runs |
+| `BEGIN` | `ACK` | a whole bank is erased before this answer |
+| `DATA` at 0 | `ACK` | 256 image bytes go into flash |
+| `DATA` at 256, checksum deliberately broken | `NAK` code `01`, BAD_CRC | **inside a session a corrupted frame IS answered**, unlike outside one, where the board stays silent |
+| the same `DATA` at 256, clean | `ACK` | a `NAK` is never remembered, so a clean resend is judged afresh |
+| `COMMIT` | `NAK` code `05`, FLASH_ERROR | the image verified in flash; switching banks is firmware piece 7, so the board refuses that step |
+
+**A mistake worth keeping**, because it is exactly the kind a model makes: the
+first version of this script sent the whole 256-byte image in one `DATA` and
+then "resent" it at offset 0. The board answered `NAK BAD_OFFSET`, correctly,
+because after a full image it waits at offset 256. A repeat only means
+something at the offset the board is waiting for. The script was wrong, the
+board was right, and the capture now sends two chunks so the resend lands
+where it belongs.
+
+## `mixed-wire-split-line.txt`
+
+The same capture as `mixed-wire-capture.txt`, with **one telemetry burst cut
+in two by hand**, between `equipment/0/` and the rest, with the second half
+given a timestamp 40 ms later. The line marked `# CUT BY HAND here` says so in
+the file itself.
+
+Nothing on the board produced this split. A board writes a line in one
+blocking call; a split is what a HOST sees when USB delivers a burst in two
+pieces or a read returns early. It is in here because a reader that assumes a
+telemetry line always arrives whole will pass every other test and fail on a
+real wire.
