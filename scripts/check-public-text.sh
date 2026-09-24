@@ -43,9 +43,29 @@ fi
 
 found=$(printf '%s\n' "$text" | grep -nE "$FORBIDDEN" || true)
 
-if [ -n "$found" ]; then
+# The rule is about the SENTENCE, not about where the text happens to wrap,
+# so the same text is checked again with every line break turned into a
+# space.
+#
+# Found on 2026-09-25, by this file passing a commit of mine that broke the
+# rule twice. A body wraps near 72 characters, so a comma before and landed
+# once at the end of a line, where the pattern wants a space it cannot
+# find, and once with the comma on one line and the and on the next. GitHub
+# then used that same message as the pull request description, on one long
+# line, where CI refused it. That is the only reason anybody noticed.
+#
+# The folded text has no line numbers left, so the report shows the
+# surrounding words instead, which is what a reader needs to find it.
+folded=$(printf '%s\n' "$text" | tr '\n' ' ' \
+         | grep -oE ".{0,45}(${FORBIDDEN}).{0,45}" || true)
+
+if [ -n "$found" ] || [ -n "$folded" ]; then
     echo "Public text breaks the house rules, in $what:"
-    printf '%s\n' "$found"
+    [ -n "$found" ] && printf '%s\n' "$found"
+    if [ -n "$folded" ]; then
+        echo "Reading it as sentences, with the line breaks removed:"
+        printf '%s\n' "$folded" | sed 's/^/  ... /'
+    fi
     echo ""
     echo "Not allowed: a semicolon, a comma before and, an em-dash, a spaced"
     echo "double hyphen, or an attribution trailer."
