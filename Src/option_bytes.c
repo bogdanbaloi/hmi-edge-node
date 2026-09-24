@@ -7,6 +7,7 @@
  */
 
 #include "option_bytes.h"
+#include "arming.h"
 #include "registers.h"
 
 uint32_t option_bytes_raw(void) {
