@@ -24,8 +24,18 @@ set -e
 # so that the file which refuses them does not contain them. The em-dash comes
 # from its own UTF-8 bytes, the double hyphen from a character class. This is
 # not decoration: the first version of this script tripped its own check.
+# not decoration: the first version of this script tripped its own check.
+#
+# The en dash and the two Romanian conjunctions were added on 2026-09-25,
+# after putting the three gates side by side: this one, stil.py in the
+# commercial repo and rule 7 of bash-guard. All three enforce the same rule
+# in RULES.md and no two of them banned the same set. The en dash was
+# missing only here, so the shape refused at commit time by the guard was
+# accepted by CI, which is the worst direction for a disagreement to run.
 EM_DASH=$(printf '\342\200\224')
-FORBIDDEN=", and |;|${EM_DASH}| [-][-] |Co-Authored-By|Generated with .Claude"
+EN_DASH=$(printf '\342\200\223')
+S_HOOK=$(printf '\310\231')
+FORBIDDEN=", and |, sau |, ${S_HOOK}i |;|${EM_DASH}|${EN_DASH}| [-][-] |Co-Authored-By|Generated with .Claude"
 
 if [ "$#" -ne 1 ]; then
     echo "usage: $0 <git range>|-" >&2
