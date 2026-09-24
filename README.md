@@ -432,9 +432,13 @@ The docs job enforces the rule that every new piece carries a diagram validated
 with `plantuml -checkonly`, so the discipline is checked rather than remembered.
 
 The public text job is there for the same reason, and it was added the day the
-rule it enforces was broken twice: no `;`, no `, and`, no em-dash, no ` -- `
-and no attribution trailers, in commit subjects, commit bodies, the pull
-request title or its description. The rule had been followed by hand until a
+rule it enforces was broken twice: no semicolon, no comma before and, no
+em-dash, no spaced double hyphen and no attribution trailers, in commit
+subjects, commit bodies, the pull request title or its description.
+
+The script writes the forbidden sequences as character classes rather than
+spelling them out, so that the file which refuses them does not contain them.
+That is not decoration: the first version of this text tripped the check. The rule had been followed by hand until a
 long day on the hardware, which is exactly when a self-scan stops happening.
 `scripts/check-public-text.sh` runs the same check locally, over any range.
 
