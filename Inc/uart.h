@@ -32,8 +32,11 @@ void uart_init(void);
 /// Send a NUL-terminated string, blocking until each byte is queued.
 void uart_send_string(const char *text);
 
-/// Send len bytes as they are, 0x00 included, blocking until each is queued.
-/// For binary frames, which uart_send_string() would cut at the first 0x00.
+/// Send len bytes as they are, 0x00 included, and return only once the last
+/// bit has left the pin. For binary frames, which uart_send_string() would cut
+/// at the first 0x00, and for answers followed immediately by a reset: the
+/// board switches banks right after the ACK to COMMIT, and a reset one byte
+/// too early turns a successful update into a broken frame.
 void uart_send_bytes(const uint8_t *bytes, size_t len);
 
 /**

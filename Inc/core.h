@@ -37,6 +37,21 @@
 void core_enable_fpu(void);
 
 /**
+ * @brief Point the vector table at this image. Call before any interrupt.
+ *
+ * An image that boots from bank 2 gets there through the ST boot loader,
+ * which leaves the vector table where IT wants it, not where this image put
+ * one. RM0351 says so under Table 4: booting from bank 2, "you have to
+ * relocate the vector table to bank 2 swapped base address (0x08000000)".
+ *
+ * Found on the board on 2026-09-24, at the first real bank switch: telemetry
+ * kept running, because the main loop needs no interrupt, while every frame
+ * on the UART went unanswered, because the receive interrupt was vectoring
+ * through a table that belongs to the boot loader. Nothing on a PC could have caught it.
+ */
+void core_use_own_vector_table(void);
+
+/**
  * @brief Start the millisecond clock. Call once, before the main loop.
  *
  * Runs SysTick free at its full 24-bit range rather than reloading every

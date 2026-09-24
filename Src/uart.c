@@ -64,8 +64,19 @@ void uart_send_string(const char *text) {
     }
 }
 
+/**
+ * Waits for the last bit to leave the pin, not just for the data register to
+ * be free. TXE means "hand me the next byte", TC means "the wire is idle".
+ *
+ * Found on the board on 2026-09-24: the ACK to COMMIT reached the host with 7
+ * bytes instead of 8, because the answer is followed immediately by the reset
+ * that switches banks, and the reset cut the last byte out of the shift
+ * register. A successful update read as a broken frame.
+ */
 void uart_send_bytes(const uint8_t *bytes, size_t len) {
     for (size_t i = 0U; i < len; i++) {
         uart_send_char(bytes[i]);
+    }
+    while ((USART2_ISR & USART2_ISR_TC) == 0U) {
     }
 }

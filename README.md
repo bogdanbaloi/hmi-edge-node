@@ -69,9 +69,9 @@ on a host PC:
 
 | Layer | Files | Job |
 | --- | --- | --- |
-| HAL / BSP | `core`, `board`, `uart`, `adc`, `flash`, `crc_unit`, `watchdog`, `registers.h` | the only code that touches registers |
+| HAL / BSP | `core`, `board`, `uart`, `adc`, `flash`, `crc_unit`, `watchdog`, `option_bytes`, `registers.h` | the only code that touches registers |
 | App | `telemetry`, `temperature`, `ota_frame`, `ota_update` | pure logic: a button edge -> the frames, counts -> degrees, bytes -> update messages -> answers |
-| Utility | `byte_ring`, `crc16`, `crc32`, `confirm_record`, `le_bytes.h` | pure building blocks with no dependency, used by either layer: `uart` queues received bytes in `byte_ring` |
+| Utility | `byte_ring`, `crc16`, `crc32`, `confirm_record`, `option_plan`, `le_bytes.h` | pure building blocks with no dependency, used by either layer: `uart` queues received bytes in `byte_ring` |
 | Composition | `main.c`, `ota_port` | wires the HAL to the app and runs the loop |
 
 `telemetry` depends on injected function pointers (a temperature reader and a
@@ -210,8 +210,8 @@ mingw32-make -C tests run
 ```
 
 No board, no test framework, no dependency on the other repo. It compiles the
-pure-logic sources with the desktop compiler already on PATH. Eight binaries,
-eight different questions:
+pure-logic sources with the desktop compiler already on PATH. Nine binaries,
+nine different questions:
 
 ### `contract_frame_test`: does the wire format still match?
 
@@ -692,6 +692,44 @@ in the fault handler reboots after about 32 s instead of blinking forever.
 That was Bogdan's call on 2026-09-22. `docs/uml/trial-and-confirm.puml` has
 the whole life of an image.
 
+### `option_plan_test`: may we write the one thing that cannot be undone?
+
+The option bytes hold `RDP`, and `RDP` level 2 (`0xCC`) locks the chip
+forever: no ST-Link, no recovery. The bank switch the update needs, `BFB2`, is
+one bit in the same word. So the DECISION is a separate module from the
+writing, and it is the part the host test hammers: 98 checks, 8 mutants.
+
+The rules it enforces: refuse unless the chip reads `RDP` level 0, refuse a
+bank that is not 1 or 2, do nothing when that bank already boots, and when it
+does produce a word, change exactly one bit and carry **every other bit** of
+the current value across untouched. One test walks all 24 upper bits one at a
+time to prove the last part, because a plan that rebuilt the word instead of
+editing it could quietly move `RDP`, and `RDP` has a value you cannot take
+back.
+
+### Three guards in front of one irreversible write
+
+| Guard | What it stops | Where |
+| --- | --- | --- |
+| The plan | anything but `RDP` level 0, a bad bank, rebuilding the word | `option_plan.c`, tested on a PC |
+| The driver | being asked to write an arbitrary word: it can only carry out an approved plan | `option_bytes.c` |
+| The build | writing at all: without `OTA_BANK_SWITCH_ARMED` no register is touched and the answer is `DISARMED` | a compiler flag |
+
+Reading is always allowed, and that is how the state is checked before
+anything is armed.
+
+**Writing and applying are two steps**, because the protocol says `COMMIT` is
+answered and only then does the board reset. `select_new_bank` writes the
+options; the ACK goes out; `request_reset` sets `OBL_LAUNCH`, which resets the
+board. Doing both in one step would have reset the board before its answer
+reached the host, which the host would have read as a timeout.
+
+**Rollback** is the other half of the watchdog. At start-up, an image that is
+still on trial AND was just reset by the watchdog sends the next boot back to
+the other bank: an image that cannot keep its own loop running does not get to
+keep the board. An unconfirmed image that runs happily is left alone, because
+the host may still confirm it. `docs/uml/bank-switch.puml` has the whole path.
+
 ## Ask the board what it runs
 
 `ota-info.ps1` sends one `INFO_REQ` and shows every byte that comes back. It
@@ -737,3 +775,4 @@ checksum, sent outside a session, got no answer at all, as section 6 says.
 - Flash map (one image per bank, and the page it must not touch): `docs/uml/flash-map.puml`.
 - Flash write (unlock, erase, program, and what each refusal means): `docs/uml/flash-write.puml`.
 - Trial and confirmation (what makes an image permanent, and the watchdog): `docs/uml/trial-and-confirm.puml`.
+- Bank switch (the guards in front of the one irreversible write): `docs/uml/bank-switch.puml`.

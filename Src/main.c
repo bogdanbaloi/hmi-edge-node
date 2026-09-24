@@ -24,6 +24,7 @@
 #include "crc32.h"
 #include "crc_unit.h"
 #include "flash.h"
+#include "option_bytes.h"
 #include "ota_port.h"
 #include "ota_frame_parser.h"
 #include "ota_update.h"
@@ -43,6 +44,9 @@
  * firmware runs on the MSI reset clock.
  */
 void SystemInit(void) {
+    /* First, and before anything can interrupt: an image booted from bank 2
+       through the boot loader inherits a vector table that is not its own. */
+    core_use_own_vector_table();
     core_enable_fpu();
 }
 
@@ -72,6 +76,32 @@ _Static_assert(BYTE_RING_CAPACITY >= OTA_FRAME_MAX_SIZE,
 
 static ota_frame_parser_t g_parser;
 static ota_update_t g_update;
+
+/**
+ * @brief Roll back an image that is still on trial and just hung.
+ *
+ * This is the other half of the watchdog. An image that has not been
+ * confirmed AND was just reset by the watchdog is an image that cannot look
+ * after itself, so the next boot is sent back to the bank that was working
+ * before. An unconfirmed image that runs happily is left alone: the host may
+ * still confirm it.
+ *
+ * Reads the reset cause once, because reading it clears it, and does nothing
+ * at all in a build that is not armed to write option bytes.
+ */
+static void roll_back_a_trial_image_that_hung(void) {
+    if (watchdog_caused_last_reset() == 0U) {
+        return;
+    }
+    ota_running_t running;
+    ota_port()->running(ota_port()->ctx, &running);
+    if (running.image_state != (uint8_t)OTA_IMAGE_TRIAL) {
+        return;
+    }
+    if (option_bytes_boot_from(flash_spare_bank()) == OPTION_WRITE_OK) {
+        option_bytes_launch();  /* resets: the old image boots next */
+    }
+}
 
 /**
  * Hand every byte received since the last pass to the parser, which hands
@@ -104,6 +134,10 @@ int main(void) {
     telemetry_state_t state;
     telemetry_init(&state);
     ota_update_init(&g_update, ota_port());
+
+    /* Before the watchdog starts, because this decides whether the image that
+       is running now deserves to keep running at all. */
+    roll_back_a_trial_image_that_hung();
 
     /* Last, and never undone: from here the board reboots unless the loop
        keeps running. Started after the drivers so a hang during start-up

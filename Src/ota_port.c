@@ -5,6 +5,7 @@
 
 #include "ota_port.h"
 #include "confirm_record.h"
+#include "option_bytes.h"
 #include "core.h"
 #include "crc32.h"
 #include "crc_unit.h"
@@ -88,10 +89,20 @@ static uint32_t image_crc32(void *ctx, uint32_t size) {
                : crc32_compute(flash_spare_image(), size);
 }
 
-/// Piece 7 switches banks through BFB2. Until then, never.
+/**
+ * Writes the option bytes so the next boot comes from the bank the image was
+ * just written into. It does NOT reset: the host is waiting for the ACK to
+ * COMMIT, and request_reset() below applies the options once that ACK is out.
+ *
+ * A build that is not armed refuses here, which is honest and is what the
+ * board has been answering since piece 5: the image is written and verified,
+ * and the switch is the step it will not take.
+ */
 static ota_io_t select_new_bank(void *ctx) {
     (void)ctx;
-    return OTA_IO_FAILED;
+    return (option_bytes_boot_from(flash_spare_bank()) == OPTION_WRITE_OK)
+               ? OTA_IO_OK
+               : OTA_IO_FAILED;
 }
 
 /// Keeps the running image: writes the record that says so. Repeating it is
@@ -104,9 +115,12 @@ static ota_io_t confirm(void *ctx) {
                                                             : OTA_IO_FAILED;
 }
 
-/// Piece 7. Unreachable before it: a reset follows only an accepted COMMIT.
+/// Applies the option bytes written by select_new_bank, which resets the
+/// board. Called after the ACK to COMMIT has gone out, so the host sees the
+/// answer and then the silence of a reboot, in that order.
 static void request_reset(void *ctx) {
     (void)ctx;
+    option_bytes_launch();
 }
 
 static const ota_update_port_t k_port = {

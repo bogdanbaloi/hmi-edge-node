@@ -1,0 +1,77 @@
+@startuml bank-switch
+' The one irreversible corner of this project: the option bytes. Grounded in
+' Src/option_plan.c, Src/option_bytes.c, Src/ota_port.c and Src/main.c
+' (roll_back_a_trial_image_that_hung), with RM0351 Rev 9 section 3.4.
+
+title Switching banks, and the guards in front of it
+
+skinparam shadowing false
+
+start
+:COMMIT verified the image in the spare bank;
+:select_new_bank();
+
+partition "option_plan.c, pure logic, tested on a PC" {
+  if (bank is 1 or 2?) then (no)
+    :REFUSED_BANK;
+    stop
+  else (yes)
+  endif
+  if (RDP level 0?) then (no)
+    :REFUSED_RDP;
+    note right
+      Level 2 is 0xCC and locks the chip
+      forever. Level 1 is anything that is
+      not 0xAA. Neither is written to.
+    end note
+    stop
+  else (yes)
+  endif
+  if (that bank already boots?) then (yes)
+    :ALREADY, nothing to write;
+    stop
+  else (no)
+  endif
+  :plan = OPTR with BFB2 flipped\nand every other bit carried across;
+}
+
+if (built with OTA_BANK_SWITCH_ARMED?) then (no)
+  :DISARMED, no register is touched;
+  :NAK FLASH_ERROR to COMMIT;
+  note right
+    What the board has answered since
+    piece 5: image written and verified,
+    the switch is the step it will not take.
+  end note
+  stop
+else (yes)
+endif
+
+:unlock FLASH_CR, then the options\n(two more keys of their own);
+:write FLASH_OPTR, set OPTSTRT, wait BSY;
+note right
+  Writing and applying are separate.
+  The options sit in flash until they are
+  LOADED, and loading resets the board.
+end note
+:ACK to COMMIT goes out on the wire;
+:request_reset() sets OBL_LAUNCH;
+:the board resets and boots the new bank;
+
+partition "next boot" {
+  if (image confirmed?) then (yes)
+    :run normally;
+    stop
+  else (no, on trial)
+    if (was the last reset the watchdog?) then (yes)
+      :write the option bytes back\nto the other bank, then OBL_LAUNCH;
+      :the old image boots: ROLLBACK;
+      stop
+    else (no)
+      :keep running on trial,\nthe host may still CONFIRM;
+      stop
+    endif
+  endif
+}
+
+@enduml
