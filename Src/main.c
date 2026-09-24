@@ -44,6 +44,9 @@
  * firmware runs on the MSI reset clock.
  */
 void SystemInit(void) {
+    /* First, and before anything can interrupt: an image booted from bank 2
+       through the boot loader inherits a vector table that is not its own. */
+    core_use_own_vector_table();
     core_enable_fpu();
 }
 

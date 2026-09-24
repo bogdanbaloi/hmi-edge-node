@@ -65,6 +65,12 @@ static option_write_t write_options(uint32_t planned) {
 
 void option_bytes_launch(void) {
 #ifdef OTA_BANK_SWITCH_ARMED
+    /* OBL_LAUNCH lives in a register that write_options() locked again, and a
+       write to a locked FLASH_CR is IGNORED, with no error anywhere. That is
+       what happened on the board on 2026-09-24: the options were written, the
+       launch did nothing, and the board sat in the loop below until the
+       watchdog reset it 32 s later. Unlock, then launch. */
+    unlock_options();
     FLASH_CR |= FLASH_CR_OBL_LAUNCH;  /* resets the chip: nothing after this */
     for (;;) {
         /* Not reached. If the reset somehow does not happen, the watchdog

@@ -4,11 +4,19 @@
  */
 
 #include "core.h"
+#include "flash.h"
 #include "registers.h"
 
 static uint32_t g_millis;    ///< Whole milliseconds counted so far.
 static uint32_t g_last_cvr;  ///< SysTick value at the previous reading.
 static uint32_t g_leftover;  ///< Ticks not yet worth a millisecond.
+
+void core_use_own_vector_table(void) {
+    /* The image is linked for FLASH_RUNNING_BASE whichever bank it sits in,
+       because the running bank is remapped there, so the table is at the
+       start of the image and the offset is just that address. */
+    SCB_VTOR = FLASH_RUNNING_BASE;
+}
 
 void core_tick_init(void) {
     /* Free running at full 24-bit range, NOT reloading every millisecond.

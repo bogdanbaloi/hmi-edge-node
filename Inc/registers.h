@@ -143,6 +143,7 @@
  *
  * Addresses from the ARMv7-M Architecture Reference Manual, not RM0351: this
  * is core, and it is identical on every Cortex-M4. */
+#define SCB_VTOR               REG32(0xE000ED08UL) /* vector table address    */
 #define SCB_CPACR              REG32(0xE000ED88UL) /* coprocessor access      */
 /* CP10 and CP11, full access, 0b11 each at bits [21:20] and [23:22]. */
 #define SCB_CPACR_FPU_FULL     (0xFUL << 20)
