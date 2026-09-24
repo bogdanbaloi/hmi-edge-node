@@ -25,11 +25,17 @@
 
 /**
  * The version this image reports in INFO. The spec leaves the meaning of the
- * u32 to the sender of BEGIN; this image is the first, so 1. An image built
- * to be sent as an update gets a higher one, which is how the host tells after
- * the switch that the new image really runs.
+ * u32 to the sender of BEGIN; this image is the first, so 1.
+ *
+ * **Overridable at build time**, with `-DOTA_PORT_FIRMWARE_VERSION=2`, which
+ * is how an image meant to be sent as an update is built: after the switch,
+ * INFO reporting 2 is how the host knows the new image really runs. The
+ * CONFIRMED record does not depend on this number, it uses a checksum of the
+ * image, for the reason written in confirm_record.h.
  */
+#ifndef OTA_PORT_FIRMWARE_VERSION
 #define OTA_PORT_FIRMWARE_VERSION 1U
+#endif
 
 /// The port, with every member set. Lives as long as the program. Needs
 /// flash_init() to have run before the first INFO_REQ.
