@@ -11,8 +11,13 @@ habit is not a mechanism. Everything here has cost something once.
 ## Before the first line of code
 
 1. **Branch first.** `git checkout -b <name>` before any commit, in every
-   repo. The hook that guards `main` does not see a commit whose message comes
-   from stdin (`git commit -F -`), so it will not save you.
+   repo. The hook that guards `main` does catch this, in every form of the
+   command, since hub fixed its segment builder on 2026-09-24. **Branch first
+   anyway.** This file used to blame `git commit -F -` for the two commits that
+   landed on `main` here, which was wrong: hub could not reproduce that, and
+   the real hole was a command written on several LINES, where everything
+   below the first line was invisible to the whole hook. A guard that was
+   silently blind for days is a reason to keep the habit, not to lean on it.
 2. **Read the source, do not remember it.** A hardware fact goes in only with
    its document and page: RM0351 Rev 9 for registers and sequences, DS10198
    Rev 8 for timings, the SVD in the CubeIDE plugins for addresses and bits,
@@ -34,15 +39,38 @@ habit is not a mechanism. Everything here has cost something once.
   gets a name. clang-tidy only catches numbers.
 - **A contract question is proposed on the board, never invented quietly.**
 
-## The gates, all of them, before the commit
+## The gates, before the commit
+
+The list below is the WHOLE of what CI checks, job by job, so a local pass
+means the same thing the runner will mean. It said "all of them" until
+2026-09-25 while covering four of the five jobs, which is why every entry now
+names the job it stands for.
 
 ```
-mingw32-make -C tests run CC=gcc          # CI uses gcc; clang too is welcome
-clang-tidy over Src/*.c and tests/*.c     # same loop as .github/workflows/ci.yml
-java -jar plantuml.jar -checkonly docs/uml/*.puml
-doxygen docs/Doxyfile                     # zero warnings
-arm-none-eabi-gcc ... -T STM32L476RGTX_FLASH.ld Src/*.c Startup/*.s   # a real link
+mingw32-make -C tests run CC=gcc          # job "Host tests". CI uses gcc
+arm-none-eabi-gcc ... -T STM32L476RGTX_FLASH.ld Src/*.c Startup/*.s
+                     # job "Cross-compile for Cortex-M4", a real link
+arm-none-eabi-gcc ... tests/oversize_image.c
+                     # same job: this link MUST FAIL, "region FLASH overflowed"
+sh scripts/check-public-text.sh <base>..HEAD    # job "Public text"
+clang-tidy over Src/*.c and tests/*.c     # job "Static analysis", same loop
+java -jar plantuml.jar -checkonly docs/uml/*.puml    # job "Docs discipline"
+doxygen docs/Doxyfile                     # same job, zero warnings
 ```
+
+**What these do NOT check, said out loud every time a piece is reported done.**
+A tool that gives a go-ahead it cannot support is worse than one that gives
+none, because the next reader quotes the verdict instead of the evidence.
+
+- **The board.** Nothing above runs on hardware, and the last three real bugs
+  here were invisible to every one of these gates: a write into a locked
+  register, a vector table inherited from the boot loader, and a last byte cut
+  off by a reset.
+- **A pull request title and description.** The `public-text` job sees them,
+  no local command does, so those stay a self-scan until the PR exists.
+- **Whether the mutants still kill.** That is a separate run, below.
+- **The journal, the board entry and the charter.** No gate has an opinion
+  about them, which is exactly why they are numbered steps and not reminders.
 
 **A green local lint is evidence, not proof.** On Windows `unsigned long` is
 32 bits and on the Ubuntu runner it is 64, so

@@ -185,6 +185,28 @@ jobs:
       - name: Validate the diagrams
         run: plantuml -checkonly docs/uml/*.puml
 
+      # The delivery checklist in .claude/skills/deliver-piece/SKILL.md tells a
+      # session what to run before a commit, so it is only worth reading while
+      # it lists every job THIS file has. On 2026-09-25 it did not: it said
+      # "the gates, all of them" while covering four of five, having gone stale
+      # the day the public-text job was added. A checklist that claims to be
+      # complete and is not sends a piece to the runner believing it is clean.
+      #
+      # So the claim gets a gate of its own. Job names are read from this file
+      # rather than written twice, which is the whole point.
+      - name: The delivery checklist must name every job in this file
+        run: |
+          status=0
+          while IFS= read -r job; do
+            if grep -qF "job \"$job\"" .claude/skills/deliver-piece/SKILL.md; then
+              echo "named: $job"
+            else
+              echo "MISSING from the delivery checklist: $job"
+              status=1
+            fi
+          done <<< "$(sed -n 's/^    name: //p' .github/workflows/ci.yml)"
+          exit $status
+
       # Doxygen prints warnings without failing, so the warnings are turned
       # into the failure themselves.
       - name: Build the API reference, warnings are failures
