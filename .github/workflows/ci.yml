@@ -28,7 +28,14 @@ name: CI
 on:
   push:
     branches: [main]
+  # `edited` is NOT in the default set for pull_request, which is opened,
+  # synchronize and reopened. Without it a description can be fixed, or
+  # broken, after the check has run, and the verdict on screen belongs to
+  # text that is no longer there. Found on 2026-09-25 on PR 25, where a
+  # description of mine was refused and the correction could not be checked
+  # without a new push.
   pull_request:
+    types: [opened, synchronize, reopened, edited]
 
 # A new push to the same branch supersedes the old run.
 concurrency:
@@ -39,6 +46,7 @@ jobs:
   tests:
     name: Host tests
     runs-on: ubuntu-24.04
+    if: github.event.action != 'edited'
     steps:
       - uses: actions/checkout@v5
 
@@ -53,6 +61,7 @@ jobs:
   firmware:
     name: Cross-compile for Cortex-M4
     runs-on: ubuntu-24.04
+    if: github.event.action != 'edited'
     steps:
       - uses: actions/checkout@v5
 
@@ -129,6 +138,7 @@ jobs:
   lint:
     name: Static analysis
     runs-on: ubuntu-24.04
+    if: github.event.action != 'edited'
     steps:
       - uses: actions/checkout@v5
 
@@ -172,6 +182,7 @@ jobs:
   docs:
     name: Docs discipline
     runs-on: ubuntu-24.04
+    if: github.event.action != 'edited'
     steps:
       - uses: actions/checkout@v5
 
@@ -184,6 +195,28 @@ jobs:
       # -checkonly. This is that rule, enforced instead of remembered.
       - name: Validate the diagrams
         run: plantuml -checkonly docs/uml/*.puml
+
+      # The delivery checklist in .claude/skills/deliver-piece/SKILL.md tells a
+      # session what to run before a commit, so it is only worth reading while
+      # it lists every job THIS file has. On 2026-09-25 it did not: it said
+      # "the gates, all of them" while covering four of five, having gone stale
+      # the day the public-text job was added. A checklist that claims to be
+      # complete and is not sends a piece to the runner believing it is clean.
+      #
+      # So the claim gets a gate of its own. Job names are read from this file
+      # rather than written twice, which is the whole point.
+      - name: The delivery checklist must name every job in this file
+        run: |
+          status=0
+          while IFS= read -r job; do
+            if grep -qF "job \"$job\"" .claude/skills/deliver-piece/SKILL.md; then
+              echo "named: $job"
+            else
+              echo "MISSING from the delivery checklist: $job"
+              status=1
+            fi
+          done <<< "$(sed -n 's/^    name: //p' .github/workflows/ci.yml)"
+          exit $status
 
       # Doxygen prints warnings without failing, so the warnings are turned
       # into the failure themselves.
