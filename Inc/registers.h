@@ -183,11 +183,13 @@
 #define CRC_CR_REV_OUT         (1UL << 7)          /* reverse the result     */
 
 /* ---- FLASH controller @ 0x40022000 (RM0351 Rev 9, section 3.7) ---------
- * Only what erasing and programming the OTHER bank needs. The option byte
- * registers (OPTR, OPTKEYR) are deliberately NOT here: changing option bytes
- * is the one irreversible step in this project (RDP level 2 locks the chip
- * forever), it belongs to piece 7, and a register that is not defined cannot
- * be written by accident. */
+ * Erasing and programming the other bank, plus, since piece 7, the option
+ * bytes. **The option byte registers are the dangerous ones**: the same word
+ * holds RDP, and RDP level 2 locks the chip forever. They were left undefined
+ * on purpose until the piece that needs them, and the guard that replaces
+ * that absence now lives in option_plan.c, which refuses anything but RDP
+ * level 0, and in option_bytes.c, which refuses to write at all unless the
+ * build says otherwise. */
 #define FLASH_ACR              REG32(0x40022000UL) /* caches live here       */
 #define FLASH_KEYR             REG32(0x40022008UL) /* unlock keys go here    */
 #define FLASH_SR               REG32(0x40022010UL) /* status and errors      */
@@ -201,6 +203,14 @@
 #define FLASH_CR_MER2          (1UL << 15)         /* mass erase bank 2      */
 #define FLASH_CR_START         (1UL << 16)         /* begin the erase        */
 #define FLASH_CR_LOCK          (1UL << 31)         /* lock FLASH_CR again    */
+/* ---- the option bytes, section 3.4. Read freely, write almost never ----- */
+#define FLASH_OPTKEYR          REG32(0x4002200CUL) /* unlocks the options    */
+#define FLASH_OPTR             REG32(0x40022020UL) /* RDP, BFB2 and the rest */
+#define FLASH_OPTKEY1          0x08192A3BUL        /* first option key       */
+#define FLASH_OPTKEY2          0x4C5D6E7FUL        /* second option key      */
+#define FLASH_CR_OPTSTRT       (1UL << 17)         /* write the options      */
+#define FLASH_CR_OBL_LAUNCH    (1UL << 27)         /* load them: RESETS the chip */
+#define FLASH_CR_OPTLOCK       (1UL << 30)         /* lock the options again */
 #define FLASH_SR_EOP           (1UL << 0)          /* operation finished OK  */
 #define FLASH_SR_BSY           (1UL << 16)         /* an operation is running */
 #define FLASH_ACR_DCEN         (1UL << 10)         /* data cache enabled     */

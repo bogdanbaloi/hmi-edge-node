@@ -19,9 +19,11 @@ UPDATE_SRC   := ota_update_test.c ../Src/ota_update.c ../Src/ota_frame.c \
 RING_SRC     := byte_ring_test.c ../Src/byte_ring.c
 CRC32_SRC    := crc32_test.c ../Src/crc32.c
 RECORD_SRC   := confirm_record_test.c ../Src/confirm_record.c
+OPTION_SRC   := option_plan_test.c ../Src/option_plan.c
 
 TARGETS := contract_frame_test temperature_test fault_test ota_frame_test \
-           ota_update_test byte_ring_test crc32_test confirm_record_test
+           ota_update_test byte_ring_test crc32_test confirm_record_test \
+           option_plan_test
 
 .PHONY: all run clean
 
@@ -69,6 +71,11 @@ crc32_test: $(CRC32_SRC) ../Inc/crc32.h
 confirm_record_test: $(RECORD_SRC) ../Inc/confirm_record.h ../Inc/le_bytes.h
 	$(CC) $(CFLAGS) -o $@ $(RECORD_SRC)
 
+# The decision behind the one irreversible write on this chip: refuse unless
+# read protection is level 0, change one bit, carry every other bit across.
+option_plan_test: $(OPTION_SRC) ../Inc/option_plan.h
+	$(CC) $(CFLAGS) -o $@ $(OPTION_SRC)
+
 run: $(TARGETS)
 	./contract_frame_test
 	./temperature_test
@@ -78,6 +85,7 @@ run: $(TARGETS)
 	./byte_ring_test
 	./crc32_test
 	./confirm_record_test
+	./option_plan_test
 
 clean:
 	rm -f $(TARGETS) $(addsuffix .exe,$(TARGETS))
