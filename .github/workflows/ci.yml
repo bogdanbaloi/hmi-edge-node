@@ -2,12 +2,13 @@
 # CI for hmi-edge-node.
 #
 # The point of this file is that a pull request MEANS something here. Without
-# it a green Merge button gates nothing. Three jobs, three different questions:
+# it a green Merge button gates nothing. Five jobs, five different questions:
 #
-#   tests     does the logic still do what it claims, on a host, in seconds
-#   firmware  does it still build and LINK for the real Cortex-M4
-#   lint      does it still hold the line on naming, size and the bug classes
-#   docs      is the documentation discipline actually being followed
+#   tests        does the logic still do what it claims, on a host, in seconds
+#   firmware     does it still build and LINK for the real Cortex-M4
+#   public-text  does what this repo publishes still follow the house rules
+#   lint         does it still hold the line on naming, size and the bug classes
+#   docs         is the documentation discipline actually being followed
 #
 # None of it needs a board: telemetry and temperature are pure logic on
 # purpose, which is what makes them reachable from a runner.
@@ -100,6 +101,30 @@ jobs:
           fi
           cat oversize.log
           grep -q "region .FLASH. overflowed" oversize.log
+
+  public-text:
+    name: Public text
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'pull_request'
+    steps:
+      # The whole history, because the check reads the commits of this pull
+      # request, and a shallow clone has none of them.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # The rules live in the house rules file, the check lives here, and the
+      # reason it exists is that following them by hand failed twice in one
+      # day while somebody was concentrating on the hardware.
+      - name: The commits of this pull request
+        run: sh scripts/check-public-text.sh ${{ github.event.pull_request.base.sha }}..HEAD
+
+      # A pull request description is more public than a commit, not less.
+      - name: The title and the description
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" | sh scripts/check-public-text.sh -
 
   lint:
     name: Static analysis
