@@ -76,6 +76,7 @@
 #define USART2_ISR_NF          (1UL << 2)          /* noise detected         */
 #define USART2_ISR_ORE         (1UL << 3)          /* overrun: a byte lost   */
 #define USART2_ISR_RXNE        (1UL << 5)          /* a received byte waits  */
+#define USART2_ISR_TC          (1UL << 6)          /* the LAST bit has left  */
 #define USART2_ISR_TXE         (1UL << 7)          /* TX data register empty */
 /* ICR bits sit at the same positions as the ISR flags they clear. */
 #define USART2_ICR_ERRORS      (USART2_ISR_PE | USART2_ISR_FE | USART2_ISR_NF | \
