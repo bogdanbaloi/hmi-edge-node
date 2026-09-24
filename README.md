@@ -413,12 +413,13 @@ frame buffer.
 
 ## CI
 
-Every push and every pull request runs four jobs, none of which needs a board:
+Every push and every pull request runs five jobs, none of which needs a board:
 
 | Job | Question it answers |
 | --- | --- |
 | Host tests | does the logic still do what it claims |
 | Cross-compile | does it still build **and link** for the real Cortex-M4, and does an image larger than one flash bank still fail to link |
+| Public text | do the commits, the title and the description follow the house rules |
 | Static analysis | does it still hold the line on naming, size and bug classes |
 | Docs discipline | do the diagrams still validate, does Doxygen still run clean |
 
@@ -429,6 +430,17 @@ whole FLASH region, and passes only if that link FAILS: a size limit nobody
 tests can be widened by accident.
 The docs job enforces the rule that every new piece carries a diagram validated
 with `plantuml -checkonly`, so the discipline is checked rather than remembered.
+
+The public text job is there for the same reason, and it was added the day the
+rule it enforces was broken twice: no semicolon, no comma before and, no
+em-dash, no spaced double hyphen and no attribution trailers, in commit
+subjects, commit bodies, the pull request title or its description.
+
+The script writes the forbidden sequences as character classes rather than
+spelling them out, so that the file which refuses them does not contain them.
+That is not decoration: the first version of this text tripped the check. The rule had been followed by hand until a
+long day on the hardware, which is exactly when a self-scan stops happening.
+`scripts/check-public-text.sh` runs the same check locally, over any range.
 
 ### The local lint gate is not the CI lint gate
 
