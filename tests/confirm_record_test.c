@@ -11,6 +11,7 @@
  */
 
 #include "confirm_record.h"
+#include "flash.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -95,6 +96,25 @@ static void the_identity_is_part_of_the_record(void) {
     CHECK(confirm_record_confirms(other, OTHER_IMAGE) == CONFIRMED);
 }
 
+/**
+ * The running image and its CONFIRMED record must not overlap.
+ *
+ * `ota_port.c` computes the running image's identity ONCE and keeps it,
+ * which is only sound while nothing the firmware does can change the bytes it
+ * covers. Confirming is the one write aimed at the running bank, so the
+ * record has to live past the end of the region the identity covers. That is
+ * true by the way the constants are defined today, which is exactly the kind
+ * of truth that survives until somebody redefines one of them. So it is
+ * asserted rather than trusted.
+ */
+static void the_record_lives_outside_the_image(void) {
+    check(FLASH_CONFIRM_BASE >= FLASH_RUNNING_BASE + FLASH_IMAGE_BYTES,
+          "the CONFIRMED record starts at or after the end of the image", __LINE__);
+    check(FLASH_IMAGE_BYTES + FLASH_PAGE_BYTES <= FLASH_BANK_BYTES,
+          "image plus record page fit in one bank", __LINE__);
+    check(FLASH_IMAGE_BYTES > 0UL, "the image region is not empty", __LINE__);
+}
+
 int main(void) {
     (void)printf("unit: the CONFIRMED record in flash\n");
 
@@ -104,6 +124,7 @@ int main(void) {
     another_image_confirms_nothing();
     one_wrong_byte_anywhere_voids_it();
     the_identity_is_part_of_the_record();
+    the_record_lives_outside_the_image();
 
     if (g_failures == 0U) {
         (void)printf("OK: %u checks passed\n", g_checks);
