@@ -20,22 +20,45 @@
 
 set -e
 
-# Both the em-dash and the spaced double hyphen are BUILT rather than typed,
-# so that the file which refuses them does not contain them. The em-dash comes
-# from its own UTF-8 bytes, the double hyphen from a character class. This is
-# not decoration: the first version of this script tripped its own check.
-# not decoration: the first version of this script tripped its own check.
+# The shapes live in a data file next to this script, never in the script.
 #
-# The en dash and the two Romanian conjunctions were added on 2026-09-25,
-# after putting the three gates side by side: this one, stil.py in the
-# commercial repo and rule 7 of bash-guard. All three enforce the same rule
-# in RULES.md and no two of them banned the same set. The en dash was
-# missing only here, so the shape refused at commit time by the guard was
-# accepted by CI, which is the worst direction for a disagreement to run.
-EM_DASH=$(printf '\342\200\224')
-EN_DASH=$(printf '\342\200\223')
-S_HOOK=$(printf '\310\231')
-FORBIDDEN=", and |, sau |, ${S_HOOK}i |;|${EM_DASH}|${EN_DASH}| [-][-] |Co-Authored-By|Generated with .Claude"
+# Two reasons, both paid for. The first version of this file spelled the
+# forbidden sequences inline and tripped its own check. And on 2026-09-25 the
+# three checkers on this machine turned out to ban three different sets, with
+# the en dash missing from this one, so the local guard refused a shape that
+# this job then accepted. Hub now keeps a shared list read by the other two,
+# and asked for this list as DATA rather than as code, so the two can be
+# compared without either side parsing the other's script. A fact derived from
+# code breaks at the first refactor.
+#
+# A missing file is a hard failure rather than a fallback. This job runs on a
+# runner with the repo checked out, so the file is either there or something
+# is wrong with the checkout, and a built in list would quietly check less
+# than it claims.
+SHAPES="$(dirname "$0")/public-text-shapes.conf"
+if [ ! -f "$SHAPES" ]; then
+    echo "check-public-text: cannot read $SHAPES" >&2
+    exit 2
+fi
+
+# Field 3 of each row, trimmed, then unquoted. The spaces INSIDE the quotes
+# are part of the shape, which is why the trim happens before the quotes come
+# off. Then every regular expression metacharacter is escaped, because the
+# file holds plain literals by design and one of them contains a bracket.
+FORBIDDEN=$(awk -F"|" '
+    !/^[[:space:]]*#/ && NF >= 4 {
+        s = $3
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+        gsub(/^"|"$/, "", s)
+        if (s != "") print s
+    }' "$SHAPES" |
+    sed 's/[][\.^$*+?(){}|]/\\&/g' |
+    paste -sd"|" -)
+
+if [ -z "$FORBIDDEN" ]; then
+    echo "check-public-text: no shapes read from $SHAPES" >&2
+    exit 2
+fi
 
 if [ "$#" -ne 1 ]; then
     echo "usage: $0 <git range>|-" >&2
