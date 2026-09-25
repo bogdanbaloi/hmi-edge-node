@@ -22,13 +22,42 @@
  * the linker loaded into flash. Two builds differ somewhere in there, so a
  * CONFIRMED record written for one cannot confirm another, which a version
  * constant could not promise (see confirm_record.h).
+ *
+ * **Computed once, and the reason it is safe to cache is a fact about the
+ * flash map rather than a hope.** The bytes this covers run from
+ * FLASH_RUNNING_BASE to the linker symbol at the image end. An update is
+ * written to the SPARE bank, and the CONFIRMED record lives past the image
+ * end at FLASH_RUNNING_BASE + FLASH_IMAGE_BYTES, so not even confirming
+ * touches them. Nothing this firmware does while running can change the
+ * answer.
+ *
+ * **Why it was worth changing.** It was recomputed on every INFO_REQ: about
+ * 13 ms at the current image size, and about 0.7 s at the largest image the
+ * linker allows, measured from 91 ms per 64 KB with the hardware unit. That
+ * is a large part of the 2 s the host gives any answer, spent on a value that
+ * never moves.
+ *
+ * **On the cache filling itself.** ota_port_init() fills it at start-up, at a
+ * moment nobody is waiting. A caller that arrives first fills it instead.
+ * That second path is not a fallback covering a missing init: it returns the
+ * same number, only later, so no call order can make this WRONG, only slower.
  */
+static uint32_t g_running_identity;
+static uint8_t g_running_identity_known;
+
 static uint32_t running_identity(void) {
-    const uint32_t bytes = flash_image_bytes();
-    return (crc_unit_is_trustworthy() != 0U)
-               ? crc_unit_compute_words(flash_running_words(), bytes)
-               : crc32_compute((const uint8_t *)flash_running_words(), bytes);
+    if (g_running_identity_known == 0U) {
+        const uint32_t bytes = flash_image_bytes();
+        g_running_identity =
+            (crc_unit_is_trustworthy() != 0U)
+                ? crc_unit_compute_words(flash_running_words(), bytes)
+                : crc32_compute((const uint8_t *)flash_running_words(), bytes);
+        g_running_identity_known = 1U;
+    }
+    return g_running_identity;
 }
+
+void ota_port_init(void) { (void)running_identity(); }
 
 static uint32_t now_ms(void *ctx) {
     (void)ctx;

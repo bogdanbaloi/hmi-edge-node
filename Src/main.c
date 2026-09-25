@@ -121,6 +121,7 @@ int main(void) {
     flash_init();
     crc32_init();
     crc_unit_init();  /* checks itself, and falls back to crc32.c if it fails */
+    ota_port_init();  /* the image identity, once, before anyone asks */
     ota_frame_parser_init(&g_parser);
     uart_init();
     adc_temp_init();

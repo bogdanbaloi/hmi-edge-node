@@ -48,10 +48,9 @@ names the job it stands for.
 
 ```
 mingw32-make -C tests run CC=gcc          # job "Host tests". CI uses gcc
-arm-none-eabi-gcc ... -T STM32L476RGTX_FLASH.ld Src/*.c Startup/*.s
-                     # job "Cross-compile for Cortex-M4", a real link
-arm-none-eabi-gcc ... tests/oversize_image.c
-                     # same job: this link MUST FAIL, "region FLASH overflowed"
+sh scripts/arm-link-check.sh    # job "Cross-compile for Cortex-M4", both
+                     # halves: a real link, then the oversized image whose
+                     # link MUST FAIL with "region FLASH overflowed"
 sh scripts/check-public-text.sh <base>..HEAD    # job "Public text"
 clang-tidy over Src/*.c and tests/*.c     # job "Static analysis", same loop
 java -jar plantuml.jar -checkonly docs/uml/*.puml    # job "Docs discipline"
@@ -69,6 +68,12 @@ none, because the next reader quotes the verdict instead of the evidence.
 - **A pull request title and description.** The `public-text` job sees them,
   no local command does, so those stay a self-scan until the PR exists.
 - **Whether the mutants still kill.** That is a separate run, below.
+- **That the RUNNER will agree about the firmware build.** `arm-link-check.sh`
+  uses the toolchain STM32CubeIDE ships, ST's 14.3.rel1, while the runner
+  installs Ubuntu's `gcc-arm-none-eabi`. A pass here is evidence, the same way
+  a green local clang-tidy is evidence. This script existed only from
+  2026-09-25: before it, every piece was delivered with both ARM gates
+  declared as not run, because nobody had looked inside the CubeIDE install.
 - **The journal, the board entry and the charter.** No gate has an opinion
   about them, which is exactly why they are numbered steps and not reminders.
 

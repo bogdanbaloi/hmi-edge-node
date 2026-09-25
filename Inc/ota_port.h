@@ -12,15 +12,15 @@
  * itself. It sits here, and not in a driver, because a driver that knew the
  * port type would make the HAL depend on application code.
  *
- * **What is real today (piece 6 of 7):** the clock, sending, INFO with the
- * real image state, erasing and programming the spare bank, verifying it, and
- * CONFIRM, which writes the record that keeps the running image.
+ * **What is real:** the whole chain. The clock, sending, INFO with the real
+ * image state, erasing and programming the spare bank, verifying it, CONFIRM,
+ * which writes the record that keeps the running image, selecting the new
+ * boot bank through the option bytes, and the reset that applies it.
  *
- * **What is refused, honestly, until piece 7:** switching banks and the reset
- * that follows it. So a full session ends at COMMIT with NAK FLASH_ERROR,
- * after the image has been written and verified. A board that claimed an
- * update worked when it cannot yet switch would be worse than one that says
- * so.
+ * This paragraph said "piece 6 of 7" and listed bank switching as refused
+ * until 2026-09-25, which stopped being true when piece 7 landed. A header
+ * describing a stage the code has left is read as current by whoever opens it
+ * next.
  */
 
 /**
@@ -40,5 +40,19 @@
 /// The port, with every member set. Lives as long as the program. Needs
 /// flash_init() to have run before the first INFO_REQ.
 const ota_update_port_t *ota_port(void);
+
+/**
+ * @brief Work out the running image's identity now, so INFO_REQ does not.
+ *
+ * INFO reports whether the running image is confirmed, which means checksumming
+ * everything the linker put in flash. That value cannot change while this image
+ * runs, so it is computed once here instead of on every request: about 13 ms at
+ * the current size, about 0.7 s at the largest image the linker allows.
+ *
+ * Call after flash_init() and crc_unit_init(). **Skipping it cannot produce a
+ * wrong answer**, only a slower first INFO_REQ, because the first caller works
+ * the same value out for itself. See ota_port.c for why caching it is sound.
+ */
+void ota_port_init(void);
 
 #endif /* OTA_PORT_H */
