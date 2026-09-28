@@ -115,11 +115,22 @@ point of the piece and what would improve it. "Nothing" is not an answer.
    workstream's file.
 3. **Charter** (`firmware.md`, the state section): the piece, its figures and
    what remains.
-4. **Push command**, always with the `cd` in it:
+4. **Push command**, always with the `cd` in it, because Bogdan runs it himself
+   and a command that assumes a working directory fails from wherever he is.
+   Build the path rather than reading it from here:
 
 ```bash
-cd /c/Users/Bebe/STM32CubeIDE/workspace_2.2.0/nucleo-serial-button && git push -u origin <branch>
+git rev-parse --show-toplevel    # then: cd <that path> && git push -u origin <branch>
 ```
+
+   **Why this file no longer spells the path out.** It used to carry the
+   absolute path of this checkout, which put a Windows username plus a
+   directory layout into 28 revisions of a public repository. A history sweep
+   on 2026-09-28 found it, prompted by a neighbouring repository being forked:
+   a fork keeps whatever the history held, so the cheap move is to stop
+   writing it rather than to rewrite what is already out. The handed over
+   command still carries the full `cd`. It is composed at the time, from the
+   repository, instead of copied from a file that anybody can read.
 
 5. **After the merge**, verify it: `git pull` (read the real exit code),
    `git log main..<branch>` must be empty, then delete the branch, close the
