@@ -22,10 +22,12 @@ RECORD_SRC   := confirm_record_test.c ../Src/confirm_record.c
 OPTION_SRC   := option_plan_test.c ../Src/option_plan.c
 ADXL_SRC     := adxl345_test.c ../Src/adxl345.c
 REPORT_SRC   := adxl_report_test.c ../Src/adxl_report.c
+VIB_SRC      := vibration_test.c ../Src/vibration.c
 
 TARGETS := contract_frame_test temperature_test fault_test ota_frame_test \
            ota_update_test byte_ring_test crc32_test confirm_record_test \
-           option_plan_test adxl345_test adxl_report_test
+           option_plan_test adxl345_test adxl_report_test \
+           vibration_test
 
 .PHONY: all run clean
 
@@ -90,6 +92,12 @@ adxl345_test: $(ADXL_SRC) ../Inc/adxl345.h
 adxl_report_test: $(REPORT_SRC) ../Inc/adxl_report.h
 	$(CC) $(CFLAGS) -o $@ $(REPORT_SRC)
 
+# The vibration figure. Every expected value is worked out from the
+# definition of root mean square and written as a literal, so the test
+# cannot agree with the code by computing it the same way.
+vibration_test: $(VIB_SRC) ../Inc/vibration.h
+	$(CC) $(CFLAGS) -o $@ $(VIB_SRC)
+
 run: $(TARGETS)
 	./contract_frame_test
 	./temperature_test
@@ -102,6 +110,7 @@ run: $(TARGETS)
 	./option_plan_test
 	./adxl345_test
 	./adxl_report_test
+	./vibration_test
 
 clean:
 	rm -f $(TARGETS) $(addsuffix .exe,$(TARGETS))
