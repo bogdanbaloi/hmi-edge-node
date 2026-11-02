@@ -18,12 +18,14 @@
  */
 
 #include "adc.h"
+#include "adxl_port.h"
 #include "board.h"
 #include "byte_ring.h"
 #include "core.h"
 #include "crc32.h"
 #include "crc_unit.h"
 #include "flash.h"
+#include "i2c.h"
 #include "option_bytes.h"
 #include "ota_port.h"
 #include "ota_frame_parser.h"
@@ -116,6 +118,30 @@ static void ota_poll(void) {
     ota_update_tick(&g_update);
 }
 
+/**
+ * Say on the wire whether the accelerometer is there, once, at start-up.
+ *
+ * Three answers rather than one, because they have three different causes
+ * and a single "it did not work" would send somebody looking in the wrong
+ * place. `absent` means nothing acknowledged the address at all, which is
+ * wiring, a missing pull-up, or CS left floating so the part came up in
+ * SPI mode. `wrong` means something DID answer and it was not an ADXL345.
+ */
+static void report_accelerometer(void) {
+    switch (adxl345_begin(adxl_bus())) {
+    case ADXL345_OK:
+        uart_send_string("adxl,ready\n");
+        break;
+    case ADXL345_WRONG_DEVICE:
+        uart_send_string("adxl,wrong\n");
+        break;
+    case ADXL345_BUS_ERROR:
+    default:
+        uart_send_string("adxl,absent\n");
+        break;
+    }
+}
+
 int main(void) {
     board_init();
     flash_init();
@@ -125,12 +151,16 @@ int main(void) {
     ota_frame_parser_init(&g_parser);
     uart_init();
     adc_temp_init();
+    i2c1_init();
 
     g_cal.ts_cal1     = adc_ts_cal1();
     g_cal.ts_cal2     = adc_ts_cal2();
     g_cal.vrefint_cal = adc_vrefint_cal();
 
     core_tick_init();
+
+    /* Needs the clock, so it sits after core_tick_init. */
+    report_accelerometer();
 
     telemetry_state_t state;
     telemetry_init(&state);
