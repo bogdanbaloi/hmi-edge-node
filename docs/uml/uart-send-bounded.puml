@@ -1,0 +1,52 @@
+@startuml uart-send-bounded
+' Why every wait on a transmitter flag is counted. Grounded in Src/uart.c
+' (wait_for_flag, uart_send_char, uart_send_string, uart_send_bytes) and in
+' the watchdog period from Inc/watchdog.h.
+
+title Sending a line, with no way to wait forever
+
+skinparam shadowing false
+
+start
+
+:a line to send;
+
+repeat
+  :next character;
+
+  while (TXE set?) is (no)
+    :one more turn;
+    if (turns used up?) then (yes)
+      :give up on this byte;
+      note right
+        The transmitter is not working.
+        The rest of the line is dropped
+        rather than spending the whole
+        limit again on every character.
+      end note
+      :return, loop carries on;
+      stop
+    else (no)
+    endif
+  endwhile (yes)
+
+  :write the byte to TDR;
+repeat while (more characters?) is (yes)
+
+:done;
+
+stop
+
+legend bottom
+  Counted in TURNS, not milliseconds, and deliberately so. This runs on
+  paths where the millisecond clock is not started yet, and a stopped
+  clock is one of the faults the bound exists to survive. A guard that
+  leans on the thing it guards against is not a guard.
+
+  100000 turns is roughly 0.17 s at 4 MHz, about two thousand byte times
+  at 115200. Far past any wait a working transmitter needs, far short of
+  the 32.8 s watchdog. That gap is the point: the main loop gets back to
+  feeding the dog instead of dying inside a send.
+endlegend
+
+@enduml

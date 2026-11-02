@@ -10,6 +10,10 @@
 /// 4 MHz PCLK1 / 115200, oversampling 16 -> BRR = round(4e6 / 115200) = 35.
 #define UART_BRR_115200 35UL
 
+/// How many turns a send waits for the transmitter before giving up on the
+/// byte. The arithmetic behind the number is in wait_for_flag below.
+#define UART_SEND_SPIN_LIMIT 100000UL
+
 /// Received bytes on their way from the interrupt to the main loop. The
 /// interrupt is its only writer and uart_read_byte() its only reader, which is
 /// the condition byte_ring.h needs to be safe without masking interrupts.
@@ -52,15 +56,59 @@ uint32_t uart_read_byte(uint8_t *out) {
                                                        : UART_NOTHING_WAITING;
 }
 
-static void uart_send_char(uint8_t byte) {
-    while ((USART2_ISR & USART2_ISR_TXE) == 0U) {
+/**
+ * @brief Wait for one flag in the status register, but not forever.
+ *
+ * Counted in SPINS, not milliseconds, and that is the point. A timeout built
+ * on core_millis() would be useless here for two reasons: this is called
+ * before core_tick_init() has started the clock on some paths, and a stopped
+ * clock is one of the faults this guard exists to survive. A guard that
+ * depends on the thing it guards against is not a guard.
+ *
+ * The number: one byte at 115200 takes 87 us, which is 348 cycles at the
+ * 4 MHz this firmware runs at. This loop is a load, a mask and a branch, so
+ * roughly fifty turns per byte time. A limit of 100000 is about two thousand
+ * byte times, around 0.17 s. Far past any wait a working transmitter can
+ * need, and far short of the 32.8 s watchdog, which is the whole point: the
+ * loop gets to carry on and feed the dog instead of dying inside this
+ * function.
+ *
+ * Returns 1 when the flag arrived, 0 when it ran out of turns.
+ */
+static uint32_t wait_for_flag(uint32_t flag) {
+    for (uint32_t spins = 0U; spins < UART_SEND_SPIN_LIMIT; spins++) {
+        if ((USART2_ISR & flag) != 0U) {
+            return 1U;
+        }
     }
-    USART2_TDR = (uint32_t)byte;
+    return 0U;
 }
 
+/// Hand one byte to the transmitter. Returns 0 if it never asked for it,
+/// in which case the transmitter is not working and the caller should stop.
+static uint32_t uart_send_char(uint8_t byte) {
+    if (!wait_for_flag(USART2_ISR_TXE)) {
+        return 0U;
+    }
+    USART2_TDR = (uint32_t)byte;
+    return 1U;
+}
+
+/**
+ * Stops at the first byte the transmitter would not take.
+ *
+ * The rest of the line is abandoned on purpose. A transmitter that did not
+ * ask for one byte will not ask for the next either, so pushing on would
+ * spend the spin limit again per character and turn a dead UART into a stall
+ * of seconds. This is a silent loss, which this firmware normally refuses,
+ * but there is no honest way to report a broken UART over that same UART. The
+ * board staying alive is what buys the chance to say it some other way.
+ */
 void uart_send_string(const char *text) {
     while (*text != '\0') {
-        uart_send_char((uint8_t)*text++);
+        if (!uart_send_char((uint8_t)*text++)) {
+            return;
+        }
     }
 }
 
@@ -72,11 +120,16 @@ void uart_send_string(const char *text) {
  * bytes instead of 8, because the answer is followed immediately by the reset
  * that switches banks, and the reset cut the last byte out of the shift
  * register. A successful update read as a broken frame.
+ *
+ * Both waits are bounded. The TC wait especially: it is the last thing that
+ * runs before a bank switch, so a transmitter that never finishes would hang
+ * the board at the exact moment an update is meant to complete.
  */
 void uart_send_bytes(const uint8_t *bytes, size_t len) {
     for (size_t i = 0U; i < len; i++) {
-        uart_send_char(bytes[i]);
+        if (!uart_send_char(bytes[i])) {
+            return;
+        }
     }
-    while ((USART2_ISR & USART2_ISR_TC) == 0U) {
-    }
+    (void)wait_for_flag(USART2_ISR_TC);
 }

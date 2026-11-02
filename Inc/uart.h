@@ -16,7 +16,10 @@
  * the main loop cannot promise that: a telemetry line alone keeps it busy for
  * about 2.7 ms. So the interrupt moves each byte into a queue and the loop
  * collects them with uart_read_byte() whenever it gets there. Sending has no
- * such deadline, so it stays a simple blocking loop.
+ * such deadline, so it stays a blocking loop, but a BOUNDED one: an
+ * unbounded wait on a transmitter flag is a way for the whole board to stop,
+ * and this firmware has a 32.8 s watchdog that would turn that into a reset
+ * loop rather than a message.
  */
 
 /// Returned by uart_read_byte() when a byte was taken.
@@ -29,7 +32,10 @@
 /// functions are already configured (see board_init()).
 void uart_init(void);
 
-/// Send a NUL-terminated string, blocking until each byte is queued.
+/// Send a NUL-terminated string, blocking until each byte is queued, but
+/// never forever: if the transmitter stops asking for bytes the rest of the
+/// string is dropped and this returns, so a dead UART cannot hang the main
+/// loop into a watchdog reset.
 void uart_send_string(const char *text);
 
 /// Send len bytes as they are, 0x00 included, and return only once the last
