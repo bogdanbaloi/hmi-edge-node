@@ -28,7 +28,9 @@
 #define RCC_APB2ENR            REG32(0x40021060UL) /* SYSCFG clock (on APB2) */
 #define RCC_AHB2ENR_GPIOAEN    (1UL << 0)          /* enable GPIOA clock     */
 #define RCC_AHB2ENR_GPIOCEN    (1UL << 2)          /* enable GPIOC clock     */
+#define RCC_AHB2ENR_GPIOBEN    (1UL << 1)          /* enable GPIOB clock     */
 #define RCC_APB1ENR1_USART2EN  (1UL << 17)         /* enable USART2 clock    */
+#define RCC_APB1ENR1_I2C1EN    (1UL << 21)         /* enable I2C1 clock      */
 #define RCC_APB2ENR_SYSCFGEN   (1UL << 0)          /* enable SYSCFG clock    */
 
 /* ---- GPIOA @ 0x48000000  (PA2/PA3 = USART2 TX/RX AF7, PA5 = LED LD2) --- */
@@ -244,5 +246,52 @@
 #define PIN_USART2_RX  3U   /* PA3  */
 #define PIN_LED        5U   /* PA5  */
 #define PIN_BUTTON     13U  /* PC13 */
+
+
+/* ---- GPIOB: the I2C1 pins, PB8 (SCL) and PB9 (SDA) ---------------------
+ * Base 0x48000400, offsets as for every GPIO port. Addresses and bit
+ * positions read from STM32L476.svd in the CubeIDE install, which the
+ * charter names as the source for addresses and bits.
+ */
+#define GPIOB_MODER            REG32(0x48000400UL) /* pin mode, 2 bits each  */
+#define GPIOB_OTYPER           REG32(0x48000404UL) /* push-pull or open-drain*/
+#define GPIOB_PUPDR            REG32(0x4800040CUL) /* pull-up, 2 bits each   */
+#define GPIOB_AFRH             REG32(0x48000424UL) /* alt function, pins 8-15*/
+
+/* ---- I2C1 ---------------------------------------------------------------
+ * Base 0x40005400. This is the v2 peripheral: one TIMINGR holds the whole
+ * bit timing, and CR2 carries the address, the length and the direction of
+ * a transfer rather than a chain of status driven steps.
+ */
+#define I2C1_CR1               REG32(0x40005400UL) /* control register 1     */
+#define I2C1_CR2               REG32(0x40005404UL) /* transfer setup         */
+#define I2C1_TIMINGR           REG32(0x40005410UL) /* bit timing             */
+#define I2C1_ISR               REG32(0x40005418UL) /* status                 */
+#define I2C1_ICR               REG32(0x4000541CUL) /* flag clear             */
+#define I2C1_RXDR              REG32(0x40005424UL) /* receive data           */
+#define I2C1_TXDR              REG32(0x40005428UL) /* transmit data          */
+
+#define I2C1_CR1_PE            (1UL << 0)          /* peripheral enable      */
+
+#define I2C1_CR2_RD_WRN        (1UL << 10)         /* 1 = read, 0 = write    */
+#define I2C1_CR2_START         (1UL << 13)         /* send a start           */
+#define I2C1_CR2_STOP          (1UL << 14)         /* send a stop            */
+#define I2C1_CR2_AUTOEND       (1UL << 25)         /* stop after NBYTES      */
+#define I2C1_CR2_NBYTES_SHIFT  16U                 /* byte count field       */
+#define I2C1_CR2_SADD_SHIFT    1U                  /* 7-bit address sits at  */
+                                                   /* bits 7:1 of SADD       */
+#define I2C1_ISR_TXE           (1UL << 0)          /* transmit data empty    */
+#define I2C1_ISR_TXIS          (1UL << 1)          /* ready for next byte    */
+#define I2C1_ISR_RXNE          (1UL << 2)          /* a byte arrived         */
+#define I2C1_ISR_NACKF         (1UL << 4)          /* the device said no     */
+#define I2C1_ISR_STOPF         (1UL << 5)          /* stop seen on the bus   */
+#define I2C1_ISR_TC            (1UL << 6)          /* transfer complete      */
+#define I2C1_ISR_BERR          (1UL << 8)          /* bus error              */
+#define I2C1_ISR_ARLO          (1UL << 9)          /* arbitration lost       */
+
+#define I2C1_ICR_NACKCF        (1UL << 4)          /* clear NACKF            */
+#define I2C1_ICR_STOPCF        (1UL << 5)          /* clear STOPF            */
+#define I2C1_ICR_BERRCF        (1UL << 8)          /* clear BERR             */
+#define I2C1_ICR_ARLOCF        (1UL << 9)          /* clear ARLO             */
 
 #endif /* REGISTERS_H */

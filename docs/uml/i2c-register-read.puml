@@ -1,0 +1,64 @@
+@startuml i2c-register-read
+' Reading one register over I2C1, which is the shape every ADXL345 access
+' takes. Grounded in Src/i2c.c (i2c1_write_then_read, begin_transfer,
+' wait_for, force_stop) and in STM32L476.svd for the register and bit names.
+
+title One register read, and the three ways it can end badly
+
+skinparam shadowing false
+
+participant "caller" as app
+participant "i2c1_write_then_read" as drv
+participant "I2C1\n(peripheral)" as per
+participant "device\n(ADXL345 at 0x53)" as dev
+
+app -> drv : address, register number, one byte out
+activate drv
+
+drv -> per : CR2 = address, NBYTES 1, write, no AUTOEND, START
+note right of drv
+  AUTOEND is deliberately OFF here.
+  The bus must stay held so the read
+  can open with a repeated start.
+end note
+per -> dev : start, address, write
+
+alt device answers
+  per --> drv : TXIS
+  drv -> per : TXDR = register number
+  per -> dev : register number
+  per --> drv : TC, the write half is done
+
+  drv -> per : CR2 = address, NBYTES n, read, AUTOEND, START
+  per -> dev : repeated start, address, read
+  dev --> per : the bytes
+  loop for each byte
+    per --> drv : RXNE
+    drv -> per : read RXDR
+  end
+  per --> drv : STOPF
+  drv -> per : ICR = STOPCF
+  drv --> app : I2C_OK
+else device not plugged in, or holding SCL
+  note over drv
+    No flag ever arrives. core_millis is
+    free running, so the 5 ms budget
+    expires even with the bus stuck.
+  end note
+  drv -> per : CR2 |= STOP
+  drv --> app : I2C_TIMEOUT
+else device says no
+  per --> drv : NACKF
+  drv -> per : ICR = NACKCF
+  drv -> per : CR2 |= STOP
+  drv --> app : I2C_NACK
+end
+
+deactivate drv
+
+note across
+  Every exit puts a stop on the bus and clears the flag behind it.
+  A BERR left standing would be read as the NEXT transfer's error.
+end note
+
+@enduml
