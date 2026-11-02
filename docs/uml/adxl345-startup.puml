@@ -1,0 +1,58 @@
+@startuml adxl345-startup
+' Bringing the accelerometer up, and why the order of the four writes is
+' not a matter of taste. Grounded in Src/adxl345.c (adxl345_begin) and in
+' the ADXL345 datasheet Rev 0, Table 16 for the registers, Table 6 for the
+' rate codes and Table 19 for the FIFO modes.
+
+title Start-up, in the order the part asks for
+
+skinparam shadowing false
+
+start
+
+:read DEVID (0x00);
+
+if (answered 0xE5?) then (no)
+  :return WRONG_DEVICE;
+  note right
+    Nothing is configured.
+    Something else lives at this
+    address, or the bus reads as
+    zero because nothing is there.
+  end note
+  stop
+else (yes)
+endif
+
+note right
+  Everything below happens while
+  the part is STILL IN STANDBY.
+  It powers up that way and the
+  datasheet asks for the settings
+  to be in place before it runs.
+end note
+
+:BW_RATE   = 0x0D   (800 Hz, 400 Hz bandwidth);
+:DATA_FORMAT = 0x09 (full resolution, plus or minus 4 g);
+:FIFO_CTL  = 0x80   (stream mode, 32 deep);
+
+:POWER_CTL = 0x08   (measure);
+note right
+  LAST. Start it any earlier and the
+  first samples are taken at 100 Hz
+  with the FIFO bypassed, which are
+  the reset settings.
+end note
+
+:return OK;
+
+stop
+
+legend bottom
+  Stream mode is what removes the need for a timer driver.
+  The sensor keeps its own 800 Hz pace and holds the latest
+  32 samples, so the firmware never has to arrive on time,
+  only often enough.
+endlegend
+
+@enduml

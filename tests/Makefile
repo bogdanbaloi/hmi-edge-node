@@ -20,10 +20,11 @@ RING_SRC     := byte_ring_test.c ../Src/byte_ring.c
 CRC32_SRC    := crc32_test.c ../Src/crc32.c
 RECORD_SRC   := confirm_record_test.c ../Src/confirm_record.c
 OPTION_SRC   := option_plan_test.c ../Src/option_plan.c
+ADXL_SRC     := adxl345_test.c ../Src/adxl345.c
 
 TARGETS := contract_frame_test temperature_test fault_test ota_frame_test \
            ota_update_test byte_ring_test crc32_test confirm_record_test \
-           option_plan_test
+           option_plan_test adxl345_test
 
 .PHONY: all run clean
 
@@ -76,6 +77,12 @@ confirm_record_test: $(RECORD_SRC) ../Inc/confirm_record.h ../Inc/le_bytes.h
 option_plan_test: $(OPTION_SRC) ../Inc/option_plan.h
 	$(CC) $(CFLAGS) -o $@ $(OPTION_SRC)
 
+# The accelerometer, against a fake bus that records every write and
+# replays canned reads. The register numbers are spelled out again in the
+# test rather than shared, so it checks the driver instead of itself.
+adxl345_test: $(ADXL_SRC) ../Inc/adxl345.h
+	$(CC) $(CFLAGS) -o $@ $(ADXL_SRC)
+
 run: $(TARGETS)
 	./contract_frame_test
 	./temperature_test
@@ -86,6 +93,7 @@ run: $(TARGETS)
 	./crc32_test
 	./confirm_record_test
 	./option_plan_test
+	./adxl345_test
 
 clean:
 	rm -f $(TARGETS) $(addsuffix .exe,$(TARGETS))
