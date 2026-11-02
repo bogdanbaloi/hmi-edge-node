@@ -25,11 +25,14 @@ REPORT_SRC   := adxl_report_test.c ../Src/adxl_report.c
 VIB_SRC      := vibration_test.c ../Src/vibration.c
 STREAM_SRC   := vib_telemetry_test.c ../Src/vib_telemetry.c \
                 ../Src/vibration.c
+ACCEL_CT_SRC := contract_accel_test.c frame_gate.c ../Src/adxl_report.c \
+                ../Src/vib_telemetry.c ../Src/vibration.c
 
 TARGETS := contract_frame_test temperature_test fault_test ota_frame_test \
            ota_update_test byte_ring_test crc32_test confirm_record_test \
            option_plan_test adxl345_test adxl_report_test \
-           vibration_test vib_telemetry_test
+           vibration_test vib_telemetry_test \
+           contract_accel_test
 
 .PHONY: all run clean
 
@@ -106,6 +109,12 @@ vibration_test: $(VIB_SRC) ../Inc/vibration.h
 vib_telemetry_test: $(STREAM_SRC) ../Inc/vib_telemetry.h
 	$(CC) $(CFLAGS) -o $@ $(STREAM_SRC)
 
+# The two accelerometer frames against the HOST's acceptance rules, with the
+# real modules producing the bytes rather than a stand-in.
+contract_accel_test: $(ACCEL_CT_SRC) frame_gate.h ../Inc/adxl_report.h \
+                    ../Inc/vib_telemetry.h
+	$(CC) $(CFLAGS) -o $@ $(ACCEL_CT_SRC)
+
 run: $(TARGETS)
 	./contract_frame_test
 	./temperature_test
@@ -120,6 +129,7 @@ run: $(TARGETS)
 	./adxl_report_test
 	./vibration_test
 	./vib_telemetry_test
+	./contract_accel_test
 
 clean:
 	rm -f $(TARGETS) $(addsuffix .exe,$(TARGETS))
