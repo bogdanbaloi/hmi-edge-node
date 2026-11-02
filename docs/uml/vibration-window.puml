@@ -1,0 +1,70 @@
+@startuml vibration-window
+' How 160 samples become one number, and why the mean is never computed on
+' its own. Grounded in Src/vibration.c (vibration_push, scaled_variance,
+' integer_square_root) and in the window arithmetic in Inc/vibration.h.
+
+title One vibration figure, from 160 samples
+
+skinparam shadowing false
+
+start
+
+:sample arrives (x, y, z in counts);
+
+:sum_x += x, sum_y += y, sum_z += z
+sum_of_squares += x*x + y*y + z*z
+samples++;
+note right
+  Two running sums and a count.
+  Nothing is stored per sample, so
+  the window costs 28 bytes instead
+  of 160 times six.
+end note
+
+if (samples < 160?) then (yes)
+  :return 0, no result yet;
+  stop
+else (no)
+endif
+
+:scaled = 160 * sum_of_squares
+          - (sum_x^2 + sum_y^2 + sum_z^2);
+note right
+  This IS the variance times 160^2,
+  with gravity and the part's offset
+  gone, because they are the mean.
+
+  The mean is never computed on its
+  own on purpose. Gravity puts about
+  256 counts on one axis and its mean
+  is not a whole number, so rounding
+  it would push up to half a count of
+  error into EVERY sample before
+  squaring. The vibration can itself
+  be a count or two, so that error
+  would not be rounding, it would be
+  the answer.
+end note
+
+:root = integer square root of scaled;
+
+:milli_g = root * mg_per_count / 160;
+note right
+  Scaled BEFORE the division. Divide
+  first and everything below one
+  count is lost, and one count is
+  4 mg on this part.
+end note
+
+:start the next window, return 1;
+
+stop
+
+legend bottom
+  160 samples at 800 Hz is 200 ms, so the five results a second that the
+  telemetry wants fall out of the window length and no timer is needed.
+  Variance adds across perpendicular axes, so shaking equally on three
+  of them reads as the square root of three times one, not three times.
+endlegend
+
+@enduml

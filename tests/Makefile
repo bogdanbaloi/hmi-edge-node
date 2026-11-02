@@ -20,10 +20,14 @@ RING_SRC     := byte_ring_test.c ../Src/byte_ring.c
 CRC32_SRC    := crc32_test.c ../Src/crc32.c
 RECORD_SRC   := confirm_record_test.c ../Src/confirm_record.c
 OPTION_SRC   := option_plan_test.c ../Src/option_plan.c
+ADXL_SRC     := adxl345_test.c ../Src/adxl345.c
+REPORT_SRC   := adxl_report_test.c ../Src/adxl_report.c
+VIB_SRC      := vibration_test.c ../Src/vibration.c
 
 TARGETS := contract_frame_test temperature_test fault_test ota_frame_test \
            ota_update_test byte_ring_test crc32_test confirm_record_test \
-           option_plan_test
+           option_plan_test adxl345_test adxl_report_test \
+           vibration_test
 
 .PHONY: all run clean
 
@@ -76,6 +80,24 @@ confirm_record_test: $(RECORD_SRC) ../Inc/confirm_record.h ../Inc/le_bytes.h
 option_plan_test: $(OPTION_SRC) ../Inc/option_plan.h
 	$(CC) $(CFLAGS) -o $@ $(OPTION_SRC)
 
+# The accelerometer, against a fake bus that records every write and
+# replays canned reads. The register numbers are spelled out again in the
+# test rather than shared, so it checks the driver instead of itself.
+adxl345_test: $(ADXL_SRC) ../Inc/adxl345.h
+	$(CC) $(CFLAGS) -o $@ $(ADXL_SRC)
+
+# When the status speaks and what it says, against a fake probe that COUNTS
+# its calls: "brought up once, never again" is a number here, not a reading
+# of the code.
+adxl_report_test: $(REPORT_SRC) ../Inc/adxl_report.h
+	$(CC) $(CFLAGS) -o $@ $(REPORT_SRC)
+
+# The vibration figure. Every expected value is worked out from the
+# definition of root mean square and written as a literal, so the test
+# cannot agree with the code by computing it the same way.
+vibration_test: $(VIB_SRC) ../Inc/vibration.h
+	$(CC) $(CFLAGS) -o $@ $(VIB_SRC)
+
 run: $(TARGETS)
 	./contract_frame_test
 	./temperature_test
@@ -86,6 +108,9 @@ run: $(TARGETS)
 	./crc32_test
 	./confirm_record_test
 	./option_plan_test
+	./adxl345_test
+	./adxl_report_test
+	./vibration_test
 
 clean:
 	rm -f $(TARGETS) $(addsuffix .exe,$(TARGETS))

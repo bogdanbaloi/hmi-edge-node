@@ -1,0 +1,66 @@
+@startuml ota-confirm
+' Why an image flashed by ST-Link has to be confirmed by hand, and the one
+' answer that looks like a driver fault and is not. Grounded in
+' Src/ota_update.c (on_confirm), Src/ota_port.c (confirm),
+' Src/flash.c (flash_write_confirm_record, record_state) and ota-confirm.ps1.
+
+title Keeping an image that ST-Link wrote
+
+skinparam shadowing false
+
+start
+
+:host sends CONFIRM (0x05), no payload;
+
+if (an update session is running?) then (yes)
+  :NAK BAD_STATE;
+  stop
+else (no)
+endif
+
+if (the running image is already CONFIRMED?) then (yes)
+  :ACK, nothing written;
+  note right
+    Repeating it is harmless.
+    A record already in place is
+    left alone, so the script is
+    safe to run after every flash.
+  end note
+  stop
+else (no, on trial)
+endif
+
+switch (what is in the record page?)
+case (erased)
+  :write the record
+  (magic plus this image's CRC32);
+  :ACK;
+case (the same record)
+  :nothing to do;
+  :ACK;
+case (a DIFFERENT image's record)
+  :NAK FLASH_ERROR;
+  note right
+    NOT a broken driver. Flash cannot
+    be overwritten, only erased, and
+    an ST-Link flash never clears this
+    page because it sits past the end
+    of the image. Answering OK here
+    would promise a confirmation that
+    does not hold.
+
+    The host erases the one page and
+    runs this again.
+  end note
+endswitch
+
+stop
+
+legend bottom
+  An image nobody confirmed is one watchdog reset away from being replaced
+  by whatever sits in the other bank. On 2026-11-02 that is exactly what
+  happened: the board kept answering buttons while running version 5 from
+  bank 2, and an evening of measurements was taken on the wrong firmware.
+endlegend
+
+@enduml
