@@ -38,6 +38,30 @@ one millisecond cannot be read by a person. While it is not `ready` the sensor
 is probed again on every period, so wiring it correctly on a running board
 recovers without a reset.
 
+Once an accelerometer has answered, about five times a second it also sends
+the vibration it measures:
+
+```
+vib,412\n                    (root mean square of the alternating part, milli-g)
+```
+
+Gravity is not in that number. The steady part of a window IS gravity plus
+whatever offset the part has, so subtracting it removes both at once and
+never needs to know which way is down: a sensor glued on at any angle works
+with no calibration.
+
+**There is no value for a sensor that is not answering.** When the bus fails
+partway through a window, or the sensor's queue is found full so samples were
+probably dropped, the window is thrown away and NO `vib` line is sent. A root
+mean square over 200 ms with a hole in it is not a root mean square over
+200 ms, and a number on this wire is one the host cannot tell apart from a
+reading. Whether the sensor is there is said separately, in words, by the
+`adxl` line above.
+
+The rate falls out of the arithmetic rather than a timer: 160 samples at the
+800 Hz the sensor is configured for is exactly 200 ms. `docs/uml/vib-stream.puml`
+has the whole path, including every point where the right answer is silence.
+
 ### Getting degrees, not counts
 
 The ADC gives raw counts. Turning them into a temperature takes the three

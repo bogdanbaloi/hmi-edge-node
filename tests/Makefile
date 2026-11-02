@@ -23,11 +23,13 @@ OPTION_SRC   := option_plan_test.c ../Src/option_plan.c
 ADXL_SRC     := adxl345_test.c ../Src/adxl345.c
 REPORT_SRC   := adxl_report_test.c ../Src/adxl_report.c
 VIB_SRC      := vibration_test.c ../Src/vibration.c
+STREAM_SRC   := vib_telemetry_test.c ../Src/vib_telemetry.c \
+                ../Src/vibration.c
 
 TARGETS := contract_frame_test temperature_test fault_test ota_frame_test \
            ota_update_test byte_ring_test crc32_test confirm_record_test \
            option_plan_test adxl345_test adxl_report_test \
-           vibration_test
+           vibration_test vib_telemetry_test
 
 .PHONY: all run clean
 
@@ -98,6 +100,12 @@ adxl_report_test: $(REPORT_SRC) ../Inc/adxl_report.h
 vibration_test: $(VIB_SRC) ../Inc/vibration.h
 	$(CC) $(CFLAGS) -o $@ $(VIB_SRC)
 
+# The stream on the wire, against a fake queue that COUNTS what was taken,
+# so "never more than were waiting" is a number rather than a reading of
+# the code. The real vibration maths is linked in, not faked.
+vib_telemetry_test: $(STREAM_SRC) ../Inc/vib_telemetry.h
+	$(CC) $(CFLAGS) -o $@ $(STREAM_SRC)
+
 run: $(TARGETS)
 	./contract_frame_test
 	./temperature_test
@@ -111,6 +119,7 @@ run: $(TARGETS)
 	./adxl345_test
 	./adxl_report_test
 	./vibration_test
+	./vib_telemetry_test
 
 clean:
 	rm -f $(TARGETS) $(addsuffix .exe,$(TARGETS))
