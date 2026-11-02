@@ -782,6 +782,53 @@ the encoder: a `BEGIN` got `A5 83 02 00 01 00 05 C6 37`, which is
 `NAK FLASH_ERROR`, because nothing writes flash yet; and a frame with a broken
 checksum, sent outside a session, got no answer at all, as section 6 says.
 
+## Keep the image you just flashed
+
+An image written with ST-Link, which is every image the IDE's Run button
+produces, starts in the `TRIAL` state: nobody has ever said it works. The
+board protects itself from a trial image that hangs, so the first watchdog
+reset sends it back to the other bank and it comes up running something
+older, with no warning on the wire at all.
+
+That cost an evening on 2026-11-02. The board answered buttons and looked
+alive while running version 5 from bank 2, and every measurement taken after
+that was of the wrong firmware.
+
+Nothing in the firmware needed changing. The protocol already has `CONFIRM`,
+message `0x05`, and the board already accepts it while idle. Only the host
+side was missing:
+
+```
+powershell -ExecutionPolicy Bypass -File ota-confirm.ps1
+```
+
+It sends `CONFIRM`, then sends `INFO_REQ` and reads the state back, because
+an `ACK` says the board accepted the request while the second answer says the
+record in flash actually changed, and those are different claims. A capture
+from the board, 2026-11-02:
+
+```
+sent     CONFIRM  A5 05 01 00 00 00 EF 44
+received A5 82 01 00 00 00 EB 01
+ACK
+version 1, bank 1, CONFIRMED
+```
+
+**One failure is worth knowing before it happens.** `NAK FLASH_ERROR` here
+does not mean the flash driver is broken. The record page can hold a record
+for a DIFFERENT image, and a record cannot be overwritten, only erased. An
+ST-Link flash does not clear that page, because it sits past the end of the
+image. The board refuses rather than answer OK to a confirmation that would
+not hold, which is the right call and leaves the host to clean up:
+
+```
+STM32_Programmer_CLI -c port=SWD -e 255
+STM32_Programmer_CLI -c port=SWD mode=hotplug -rst
+```
+
+Page 255 is `0x0807F800`, the last page of bank 1, and holds nothing else.
+The script prints these two lines itself when it hits that answer.
+
 ## Docs
 
 - API reference: `doxygen docs/Doxyfile` (output in `build/doxygen/html`).
