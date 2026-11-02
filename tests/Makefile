@@ -21,10 +21,11 @@ CRC32_SRC    := crc32_test.c ../Src/crc32.c
 RECORD_SRC   := confirm_record_test.c ../Src/confirm_record.c
 OPTION_SRC   := option_plan_test.c ../Src/option_plan.c
 ADXL_SRC     := adxl345_test.c ../Src/adxl345.c
+REPORT_SRC   := adxl_report_test.c ../Src/adxl_report.c
 
 TARGETS := contract_frame_test temperature_test fault_test ota_frame_test \
            ota_update_test byte_ring_test crc32_test confirm_record_test \
-           option_plan_test adxl345_test
+           option_plan_test adxl345_test adxl_report_test
 
 .PHONY: all run clean
 
@@ -83,6 +84,12 @@ option_plan_test: $(OPTION_SRC) ../Inc/option_plan.h
 adxl345_test: $(ADXL_SRC) ../Inc/adxl345.h
 	$(CC) $(CFLAGS) -o $@ $(ADXL_SRC)
 
+# When the status speaks and what it says, against a fake probe that COUNTS
+# its calls: "brought up once, never again" is a number here, not a reading
+# of the code.
+adxl_report_test: $(REPORT_SRC) ../Inc/adxl_report.h
+	$(CC) $(CFLAGS) -o $@ $(REPORT_SRC)
+
 run: $(TARGETS)
 	./contract_frame_test
 	./temperature_test
@@ -94,6 +101,7 @@ run: $(TARGETS)
 	./confirm_record_test
 	./option_plan_test
 	./adxl345_test
+	./adxl_report_test
 
 clean:
 	rm -f $(TARGETS) $(addsuffix .exe,$(TARGETS))

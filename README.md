@@ -24,6 +24,20 @@ temp,23.5\n                 (die temperature in Celsius, one decimal)
 The on-board LED (LD2) mirrors the equipment state. Warm the die and the `temp`
 value rises.
 
+Every two seconds, pressed or not, it also says whether the accelerometer on
+I2C1 is there:
+
+```
+adxl,ready\n                 (an ADXL345 answered and was configured)
+adxl,wrong\n                 (something answered and it is not an ADXL345)
+adxl,absent\n                (nothing acknowledged the address)
+```
+
+Repeated rather than sent once at start-up, because a status that is true for
+one millisecond cannot be read by a person. While it is not `ready` the sensor
+is probed again on every period, so wiring it correctly on a running board
+recovers without a reset.
+
 ### Getting degrees, not counts
 
 The ADC gives raw counts. Turning them into a temperature takes the three

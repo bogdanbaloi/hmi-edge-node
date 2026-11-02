@@ -8,6 +8,8 @@
  * Each button press emits, over USART2 (the ST-Link virtual COM port):
  *     `equipment/0/state,on|off\n`
  *     `temp,<degrees>\n`
+ * and every two seconds, whether or not anybody presses anything:
+ *     `adxl,ready|wrong|absent\n`
  * which the industrial-hmi SerialBackend parses. See README.md.
  *
  * On the same wire, the other way, the industrial-hmi update agent sends
@@ -19,6 +21,7 @@
 
 #include "adc.h"
 #include "adxl_port.h"
+#include "adxl_report.h"
 #include "board.h"
 #include "byte_ring.h"
 #include "core.h"
@@ -119,30 +122,36 @@ static void ota_poll(void) {
 }
 
 /**
- * Say on the wire whether the accelerometer is there, once, at start-up.
+ * The adapter the status module is given: the bus driver on one side, a
+ * presence on the other.
  *
- * Three answers rather than one, because they have three different causes
- * and a single "it did not work" would send somebody looking in the wrong
- * place. `absent` means nothing acknowledged the address at all, which is
- * wiring, a missing pull-up, or CS left floating so the part came up in
- * SPI mode. `wrong` means something DID answer and it was not an ADXL345.
+ * Three answers rather than one, because they have three different causes and
+ * a single "it did not work" would send somebody looking in the wrong place.
+ * `absent` means nothing acknowledged the address at all, which is wiring, a
+ * missing pull-up, or CS left floating so the part came up in SPI mode.
+ * `wrong` means something DID answer and it was not an ADXL345.
  */
-static void report_accelerometer(void) {
+static adxl_presence_t probe_accelerometer(void) {
     switch (adxl345_begin(adxl_bus())) {
     case ADXL345_OK:
-        uart_send_string("adxl,ready\n");
-        break;
+        return ADXL_PRESENCE_READY;
     case ADXL345_WRONG_DEVICE:
-        uart_send_string("adxl,wrong\n");
-        break;
+        return ADXL_PRESENCE_WRONG;
     case ADXL345_BUS_ERROR:
     default:
-        uart_send_string("adxl,absent\n");
-        break;
+        return ADXL_PRESENCE_ABSENT;
     }
 }
 
-int main(void) {
+/**
+ * @brief Bring up every driver, in the order they depend on each other.
+ *
+ * Split out of main so the loop and the start-up sequence can be read one at
+ * a time. The order is not cosmetic: the calibration values come from the
+ * ADC, the clock is started once the peripherals that do not need it are up,
+ * and nothing here may send on the wire before uart_init.
+ */
+static void bring_up_drivers(void) {
     board_init();
     flash_init();
     crc32_init();
@@ -158,12 +167,15 @@ int main(void) {
     g_cal.vrefint_cal = adc_vrefint_cal();
 
     core_tick_init();
+}
 
-    /* Needs the clock, so it sits after core_tick_init. */
-    report_accelerometer();
+int main(void) {
+    bring_up_drivers();
 
     telemetry_state_t state;
     telemetry_init(&state);
+    adxl_report_state_t accelerometer;
+    adxl_report_init(&accelerometer);
     ota_update_init(&g_update, ota_port());
 
     /* Before the watchdog starts, because this decides whether the image that
@@ -184,10 +196,18 @@ int main(void) {
         if (ota_update_in_session(&g_update)) {
             continue;  /* section 5: no telemetry during an update */
         }
+        const uint32_t now_ms  = core_millis();
         const uint32_t pressed = board_button_pressed();
-        if (telemetry_update(&state, pressed, core_millis(),
-                             read_die_temperature, uart_send_string)) {
+        if (telemetry_update(&state, pressed, now_ms, read_die_temperature,
+                             uart_send_string)) {
             board_led_set(state.equipment_on);
         }
+
+        /* After the update check above, never before it: a status line pushed
+           into an update session would land in the middle of the host's
+           frames. Section 5 of the protocol says the wire is quiet then, and
+           this is on the same wire. */
+        (void)adxl_report_update(&accelerometer, now_ms, probe_accelerometer,
+                                 uart_send_string);
     }
 }

@@ -1,0 +1,67 @@
+@startuml adxl-status-repeat
+' When the accelerometer status speaks, and when the sensor is configured.
+' Grounded in Src/adxl_report.c (adxl_report_update) and Src/main.c, where
+' the call sits after the update-session check on purpose.
+
+title The repeated status, once every two seconds
+
+skinparam shadowing false
+
+start
+
+:called from the loop with now_ms;
+
+if (ADXL_REPORT_PERIOD_MS passed\nsince the last line?) then (no)
+  :return 0, nothing sent;
+  note right
+    The loop runs at megahertz.
+    Compared by SUBTRACTION, so a
+    clock that wraps after 49 days
+    does not go quiet.
+  end note
+  stop
+else (yes)
+endif
+
+if (already brought up?) then (yes)
+  note right
+    The probe writes configuration
+    registers. Writing them again
+    would restart the sensor's FIFO
+    under whoever is reading it.
+  end note
+else (no)
+  :presence = probe()\n(adxl345_begin over I2C1);
+  if (READY?) then (yes)
+    :brought_up = 1;
+  else (no)
+    note right
+      Tried again next period, so
+      wiring the sensor correctly on
+      a RUNNING board recovers with
+      no reset and no reflash.
+    end note
+  endif
+endif
+
+:send one line through the sink;
+note right
+  adxl,ready | adxl,wrong | adxl,absent
+  Never a number: a sentinel value is
+  one the host cannot tell apart from
+  a reading.
+end note
+
+:return 1;
+
+stop
+
+legend bottom
+  It replaced a line sent once at start-up. On 2026-11-02 the monitor
+  opened a few milliseconds late and caught "adx" instead of the line,
+  and a later reset produced nothing at all. A status that is true for
+  one millisecond cannot be read by a person, and a demo is read by a
+  person.
+endlegend
+
+@enduml
