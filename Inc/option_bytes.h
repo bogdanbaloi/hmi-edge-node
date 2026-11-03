@@ -65,6 +65,11 @@ option_write_t option_bytes_boot_from(uint32_t bank);
  *
  * Never returns when it works: setting `OBL_LAUNCH` generates a reset. Call
  * it after the answer the host is waiting for has gone out on the wire.
+ *
+ * In an armed build that sentence is carried by `__attribute__((noreturn))`
+ * on the definition, so a version of it that could return stops the build.
+ * ota_update.c leans on this: a committed session is allowed to have no way
+ * out because the board is gone before the loop runs again.
  */
 void option_bytes_launch(void);
 

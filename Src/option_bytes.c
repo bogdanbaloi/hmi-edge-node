@@ -63,6 +63,22 @@ static option_write_t write_options(uint32_t planned) {
 
 #endif /* OTA_BANK_SWITCH_ARMED */
 
+/*
+ * The attribute is the point of this function, not decoration. The update
+ * state machine is allowed to leave a session committed precisely because
+ * this call does not come back, and until 2026-11-03 that was a sentence in
+ * a header rather than anything a tool checked. Delete the loop below and the
+ * build now fails with "'noreturn' function does return", instead of the
+ * board quietly starting to depend on a repair nobody decided to rely on.
+ *
+ * It is conditional because the promise is. A disarmed build writes no option
+ * bytes, so this function really does return, and claiming otherwise would be
+ * the same kind of unchecked sentence this is replacing. Nothing is lost: a
+ * disarmed build refuses COMMIT at select_new_bank, so it never reaches here.
+ */
+#ifdef OTA_BANK_SWITCH_ARMED
+__attribute__((noreturn))
+#endif
 void option_bytes_launch(void) {
 #ifdef OTA_BANK_SWITCH_ARMED
     /* OBL_LAUNCH lives in a register that write_options() locked again, and a
