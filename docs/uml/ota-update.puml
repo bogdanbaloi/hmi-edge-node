@@ -11,7 +11,7 @@ skinparam shadowing false
 
 state IDLE : normal mode, telemetry runs
 state RECEIVING : between BEGIN and COMMIT\ntelemetry quiet
-state COMMITTED : bank selected\nreset requested
+state COMMITTED : bank chosen, reset requested\ntelemetry runs again
 
 IDLE --> RECEIVING : BEGIN, fits, erase OK\n/ ACK
 RECEIVING --> RECEIVING : DATA at the expected offset\n/ program, ACK
@@ -22,6 +22,15 @@ RECEIVING --> IDLE : 10 s silent since\nthe board's last answer
 RECEIVING --> IDLE : flash error / NAK FLASH_ERROR
 RECEIVING --> IDLE : CRC32 differs / NAK VERIFY_FAILED
 IDLE --> IDLE : INFO_REQ / INFO\nCONFIRM / ACK
+
+note right of COMMITTED
+  **No way out, on purpose.** The image just committed
+  sits in the bank this running image calls inactive,
+  and the option bytes already point at it, so BEGIN,
+  DATA and ABORT stay refused until a reset.
+  Telemetry runs here even so: a reset that never
+  arrives must not look like a board that died.
+end note
 
 note right of IDLE
   A frame with a bad CRC16 is ignored here,
@@ -44,7 +53,7 @@ end note
 
 legend bottom
   Behind the port, so this logic is tested on a PC first: the flash is a RAM array,
-  the clock a variable, the UART a capture buffer. 73 checks, 15 mutants.
+  the clock a variable, the UART a capture buffer. 83 checks, 22 mutants.
   The silence counts from the board's LAST ANSWER, not from the last frame:
   the erase at BEGIN is the board's own work and must not count against
   the host (spec section 6, Timeouts).

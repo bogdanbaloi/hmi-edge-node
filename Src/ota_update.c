@@ -278,6 +278,22 @@ void ota_update_tick(ota_update_t *update) {
     }
 }
 
+/**
+ * A transfer in progress is RECEIVING and nothing else. COMMITTED means the
+ * bank is already chosen and the board is waiting for the reset it asked for,
+ * which is not a transfer, so the wire goes back to carrying telemetry.
+ *
+ * WHY THE DISTINCTION IS LOAD BEARING. COMMITTED has no way out on purpose.
+ * Ending it would put the state back to IDLE, where the next BEGIN would
+ * erase the bank that holds the image just committed, with the option bytes
+ * already pointing at it. So the one state the board can never leave was also
+ * the one that kept the wire silent, which made a reset that did not happen
+ * look exactly like a board that had died, with the watchdog still fed.
+ *
+ * On this board request_reset() does not return, so the loop never reaches
+ * here. Nothing in ::ota_update_port_t promises that, and a board that could
+ * go quiet for ever must not rely on an accident of the composition root.
+ */
 uint32_t ota_update_in_session(const ota_update_t *update) {
-    return (update->session != OTA_SESSION_IDLE) ? 1U : 0U;
+    return (update->session == OTA_SESSION_RECEIVING) ? 1U : 0U;
 }

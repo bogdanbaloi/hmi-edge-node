@@ -373,13 +373,24 @@ the host: each message goes through the real encoder and the real parser into
 the state machine, and each answer comes back out through a second real parser,
 so the whole receive-and-answer chain is exercised, not the state machine alone.
 
-Two rules are easy to get wrong and each has its own test.
+Three rules are easy to get wrong and each has its own test.
 
 **Nothing happens twice.** When an `ACK` is lost the host resends the same
 frame, and the board must answer again without erasing or writing again. A
 repeat is recognised by TYPE and SEQ together, not SEQ alone, because a
 restarted host counts from 1 again. A `NAK` is never remembered, so a clean
 resend after `NAK BAD_CRC` is judged afresh and accepted.
+
+**A committed session lets telemetry run again.** `COMMIT` is the one message
+after which the board has no way back. The image it just accepted sits in the
+bank the running image calls inactive, with the option bytes already pointing
+at it, so `BEGIN`, `DATA` and `ABORT` stay refused until a reset. That part was
+always right. What was wrong is that the same state also kept the wire silent,
+so a reset that never arrived looked exactly like a board that had died, with
+the watchdog still being fed. On this board `request_reset()` does not return,
+so the loop never reaches that state. Nothing in the port's contract ever
+promised it would not, which is why the question is now a test rather than an
+assumption.
 
 **The silence counts from the board's last answer, not from the last frame.**
 At `BEGIN` the board erases a whole bank before it answers; that is its own
@@ -389,13 +400,21 @@ still be open. The comparison is a subtraction, so it survives the 49-day clock
 wrap, and the wrap test checks both before and after zero, because the broken
 addition form fails before zero, not after.
 
-Fifteen mutants, each a realistic mistake, are each caught. Three of them were
-caught only after the tests were fixed: a repeat check by SEQ alone, a timeout
-written as an addition, and a session that forgot to clear its memory. The last
-one hid because the test ended its session with `ABORT`, whose own `ACK`
-overwrote the memory it was meant to check.
+Twenty two mutants, each a realistic mistake, are each caught. Three of them
+were caught only after the tests were fixed: a repeat check by SEQ alone, a
+timeout written as an addition, and a session that forgot to clear its memory.
+The last one hid because the test ended its session with `ABORT`, whose own
+`ACK` overwrote the memory it was meant to check.
 
-On the board the state machine costs 1042 bytes of code and 52 bytes of RAM.
+One of the later seven is worth naming on its own. It makes the 10 s timeout
+end a committed session as well, which is the repair that was nearly written
+before the code was read, and which would have let the next `BEGIN` erase the
+image the host had just been told it had. The test kills it.
+
+On the board the state machine costs 1044 bytes of code and 52 bytes of RAM,
+measured with ST's arm-none-eabi 14.3.rel1 at the build's own `-O1`. The
+committed-session fix cost nothing: the same 1044 bytes before and after, and
+no new field in the state.
 `docs/uml/ota-update.puml` has the states.
 
 ### `byte_ring_test`: does a received byte survive the trip to the main loop?
