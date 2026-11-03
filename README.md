@@ -542,10 +542,20 @@ each one **cannot** catch.
 | PA3 | USART2_RX (AF7), from the ST-Link virtual COM port; its only interrupt |
 | PA5 | LED LD2 (output) |
 | PC13 | USER button B1 (input, internal pull-up; low when pressed) |
+| PB8 | I2C1_SCL (AF4), open drain with the internal pull-up on |
+| PB9 | I2C1_SDA (AF4), open drain with the internal pull-up on |
 | ADC1 ch17 | internal temperature sensor |
 | ADC1 ch0 | VREFINT, the internal reference used to correct for VDDA |
 
-Clock: the MSI reset clock (4 MHz), no PLL setup. USART2 BRR = 35.
+Clock: the MSI reset clock (4 MHz), no PLL setup. USART2 BRR = 35, I2C1 at
+100 kHz.
+
+The accelerometer hangs off PB8 and PB9 at address `0x53`, which the part
+answers only with its SDO pin grounded. Its CS pin has to be tied high or it
+comes up in SPI mode and never answers on this bus at all, which the board
+reports as `adxl,absent` rather than `adxl,wrong`: nothing acknowledged the
+address, so there is no device to disagree with. No external pull-up
+resistors: `i2c1_init()` turns the chip's own on.
 
 ## Build and flash
 
