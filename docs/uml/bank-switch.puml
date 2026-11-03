@@ -56,6 +56,18 @@ note right
 end note
 :ACK to COMMIT goes out on the wire;
 :request_reset() sets OBL_LAUNCH;
+note right
+  **This call does not come back.**
+  The instruction after OBL_LAUNCH is a branch
+  to itself, so if the reset were ever missed the
+  watchdog ends it in about 32 s.
+  An armed build carries the promise as
+  __attribute__((noreturn)) on the definition,
+  so a version that could return fails to compile.
+  ota_update leans on it: a committed session is
+  allowed to have no way out only because the
+  board is gone before the loop runs again.
+end note
 :the board resets and boots the new bank;
 
 partition "next boot" {
