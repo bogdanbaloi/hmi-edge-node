@@ -10,6 +10,8 @@
  *     `temp,<degrees>\n`
  * and every two seconds, whether or not anybody presses anything:
  *     `adxl,ready|wrong|absent\n`
+ * and, once an accelerometer has answered, about five times a second:
+ *     `vib,<milli-g>\n`
  * which the industrial-hmi SerialBackend parses. See README.md.
  *
  * On the same wire, the other way, the industrial-hmi update agent sends
@@ -36,6 +38,7 @@
 #include "telemetry.h"
 #include "temperature.h"
 #include "uart.h"
+#include "vib_telemetry.h"
 #include "watchdog.h"
 
 #include <stdint.h>
@@ -169,6 +172,30 @@ static void bring_up_drivers(void) {
     core_tick_init();
 }
 
+/**
+ * @brief Everything the accelerometer puts on the wire, in one place.
+ *
+ * Called only from the part of the loop that runs outside an update session,
+ * never before the check: a line pushed into a session would land in the
+ * middle of the host's frames, and section 5 of the protocol says the wire
+ * is quiet then. This is on the same wire.
+ */
+static void service_accelerometer(adxl_report_state_t *report,
+                                  vib_telemetry_t *stream, uint32_t now_ms) {
+    (void)adxl_report_update(report, now_ms, probe_accelerometer,
+                             uart_send_string);
+
+    /* Only once the sensor has actually answered. Draining a queue that no
+       device is filling would read whatever the bus happens to carry and
+       turn it into a number, which is the one thing this wire must never
+       show. While it is absent the status line above says so, in words,
+       every two seconds. */
+    if (adxl_report_sensor_is_up(report)) {
+        (void)vib_telemetry_poll(stream, now_ms, adxl_stream(),
+                                 uart_send_string);
+    }
+}
+
 int main(void) {
     bring_up_drivers();
 
@@ -176,6 +203,8 @@ int main(void) {
     telemetry_init(&state);
     adxl_report_state_t accelerometer;
     adxl_report_init(&accelerometer);
+    vib_telemetry_t vibration;
+    vib_telemetry_init(&vibration, ADXL345_MILLI_G_PER_COUNT);
     ota_update_init(&g_update, ota_port());
 
     /* Before the watchdog starts, because this decides whether the image that
@@ -203,11 +232,6 @@ int main(void) {
             board_led_set(state.equipment_on);
         }
 
-        /* After the update check above, never before it: a status line pushed
-           into an update session would land in the middle of the host's
-           frames. Section 5 of the protocol says the wire is quiet then, and
-           this is on the same wire. */
-        (void)adxl_report_update(&accelerometer, now_ms, probe_accelerometer,
-                                 uart_send_string);
+        service_accelerometer(&accelerometer, &vibration, now_ms);
     }
 }

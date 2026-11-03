@@ -1,0 +1,78 @@
+@startuml vib-stream
+' How samples become a line on the wire, and every point where the right
+' answer is to say nothing. Grounded in Src/vib_telemetry.c
+' (vib_telemetry_poll), Src/adxl_port.c (the stream adapter) and Src/main.c
+' (service_accelerometer).
+
+title One vib line, from the sensor's queue to the wire
+
+skinparam shadowing false
+
+start
+
+:main loop calls poll(now_ms);
+
+if (VIB_POLL_PERIOD_MS passed?) then (no)
+  :return, nothing asked;
+  note right
+    The loop turns about twenty
+    thousand times a second, measured
+    on the board. Asking the sensor on
+    every turn would put twenty thousand
+    transactions a second on a bus that
+    carries a hundred thousand bits.
+  end note
+  stop
+else (yes)
+endif
+
+:ask how many samples are waiting;
+
+if (the bus answered?) then (no)
+  :throw the window away, send nothing;
+  stop
+else (yes)
+endif
+
+if (the queue is FULL?) then (yes)
+  :throw the window away, send nothing;
+  note right
+    Full means the sensor had nowhere
+    to put the next sample, so what is
+    in there is not consecutive with
+    what the window already holds.
+  end note
+  stop
+else (no)
+endif
+
+repeat
+  :take one sample;
+  if (the bus answered?) then (no)
+    :throw the window away, stop early;
+    stop
+  else (yes)
+  endif
+  :push it into the window;
+  if (window complete, 160 samples?) then (yes)
+    :send `vib,<milli-g>` + newline;
+  else (no)
+  endif
+repeat while (more were waiting?) is (yes)
+
+:return;
+
+stop
+
+legend bottom
+  Every refusal above sends NOTHING, never a number. A root mean square
+  over 200 ms with a hole in it is not a root mean square over 200 ms, and
+  a value on this wire is one the host cannot tell apart from a reading.
+  Whether the sensor is there is said separately, in words, every two
+  seconds, by adxl_report.
+
+  20 ms is half the time the sensor's 32 deep queue takes to overflow at
+  800 Hz, so one missed turn of the loop costs nothing.
+endlegend
+
+@enduml

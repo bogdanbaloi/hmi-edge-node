@@ -2,6 +2,7 @@
 #define ADXL_PORT_H
 
 #include "adxl345.h"
+#include "vib_telemetry.h"
 
 /**
  * @file adxl_port.h
@@ -14,5 +15,10 @@
 
 /// The bus, with the device address already bound. Needs i2c1_init first.
 const adxl345_bus_t *adxl_bus(void);
+
+/// The same device seen as the two questions vib_telemetry asks: how many
+/// samples are waiting, and give me the next one. Translating here is what
+/// keeps vib_telemetry free of this device's header.
+const vib_sensor_t *adxl_stream(void);
 
 #endif /* ADXL_PORT_H */

@@ -71,3 +71,7 @@ uint32_t adxl_report_update(adxl_report_state_t *state, uint32_t now_ms,
     sink(line_for(state->presence));
     return 1U;
 }
+
+uint32_t adxl_report_sensor_is_up(const adxl_report_state_t *state) {
+    return state->brought_up;
+}

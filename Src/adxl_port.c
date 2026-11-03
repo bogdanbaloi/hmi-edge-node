@@ -7,6 +7,8 @@
 
 #include "i2c.h"
 
+#include <stddef.h>
+
 /**
  * The address lives here rather than in the driver.
  *
@@ -38,4 +40,36 @@ static const adxl345_bus_t k_bus = {
 
 const adxl345_bus_t *adxl_bus(void) {
     return &k_bus;
+}
+
+/* --- the same device, as the stream sees it ----------------------------- */
+
+static int stream_fifo_level(void *ctx, uint8_t *out_entries) {
+    (void)ctx;
+    return (adxl345_fifo_level(&k_bus, out_entries) == ADXL345_OK) ? 0 : -1;
+}
+
+/// The driver hands back a sample struct while the stream asks for three
+/// numbers, so the unpacking happens here. That is the whole reason this
+/// adapter exists: neither side has to know the other's shape.
+static int stream_read_sample(void *ctx, int16_t *x, int16_t *y, int16_t *z) {
+    (void)ctx;
+    adxl345_sample_t sample = {0, 0, 0};
+    if (adxl345_read_sample(&k_bus, &sample) != ADXL345_OK) {
+        return -1;
+    }
+    *x = sample.x;
+    *y = sample.y;
+    *z = sample.z;
+    return 0;
+}
+
+static const vib_sensor_t k_stream = {
+    .ctx = NULL,
+    .fifo_level = stream_fifo_level,
+    .read_sample = stream_read_sample,
+};
+
+const vib_sensor_t *adxl_stream(void) {
+    return &k_stream;
 }

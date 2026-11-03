@@ -81,4 +81,11 @@ uint32_t adxl_report_update(adxl_report_state_t *state, uint32_t now_ms,
                             adxl_report_probe_t probe,
                             adxl_report_sink_t sink);
 
+/// 1 once the probe has reported ::ADXL_PRESENCE_READY, 0 before that.
+///
+/// The one thing another module needs from this one: there is no point
+/// draining a queue on a sensor that has never answered, and no honest
+/// figure to compute from what such a read would return.
+uint32_t adxl_report_sensor_is_up(const adxl_report_state_t *state);
+
 #endif /* ADXL_REPORT_H */
