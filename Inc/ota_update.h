@@ -135,7 +135,9 @@ typedef struct {
     uint32_t (*image_crc32)(void *ctx, uint32_t size);
     ota_io_t (*select_new_bank)(void *ctx);
     ota_io_t (*confirm)(void *ctx);
-    /// Called after the ACK to COMMIT has been sent.
+    /// Called after the ACK to COMMIT has been sent. It is allowed to return:
+    /// the state machine assumes nothing about when the reset arrives, so a
+    /// port that only schedules one is a valid port.
     void (*request_reset)(void *ctx);
 } ota_update_port_t;
 
@@ -189,7 +191,14 @@ void ota_update_on_frame(const ota_frame_t *frame, ota_frame_status_t status,
 /// Call from the main loop: ends a session that has been silent too long.
 void ota_update_tick(ota_update_t *update);
 
-/// 1 while a transfer is running and telemetry must stay quiet (section 5).
+/**
+ * @brief 1 while a transfer is running and telemetry must stay quiet
+ *        (section 5).
+ *
+ * A transfer is the stretch between BEGIN and COMMIT. A committed session is
+ * not one: its ACK is out, its bank is chosen, and it is waiting for a reset.
+ * The reason that distinction matters is in the function's own comment.
+ */
 uint32_t ota_update_in_session(const ota_update_t *update);
 
 #endif /* OTA_UPDATE_H */

@@ -358,6 +358,55 @@ static void a_whole_update_goes_through(void) {
     CHECK(g_fake.sends_at_reset == g_fake.sends);
 }
 
+/// Well past ::OTA_UPDATE_SILENCE_MS, so a timeout that reached COMMITTED
+/// would certainly have fired by now.
+#define LONG_AFTER_COMMIT_MS (OTA_UPDATE_SILENCE_MS * 3U)
+
+/**
+ * A committed session lets telemetry run again, while still refusing every
+ * message that would touch flash.
+ *
+ * The refusals matter more than the answer. The image just committed sits in
+ * the bank this running image calls inactive, and the option bytes already
+ * point at it, so a BEGIN accepted here would erase the very image the host
+ * was told it had. That is why this watches erase_calls rather than trusting
+ * the NAK code alone.
+ *
+ * It can be written at all because this fake RETURNS from request_reset,
+ * which the board's own port does not. The state after a commit was reachable
+ * on the host the whole time, and nothing asked about it in either direction.
+ */
+static void a_committed_session_lets_telemetry_run(void) {
+    setup();
+    const uint16_t next = send_whole_image();
+    host(OTA_MSG_COMMIT, next, NULL, 0U);
+    CHECK(answered_ack(next));
+    CHECK(g_fake.select_calls == 1U && g_fake.reset_calls == 1U);
+    CHECK(ota_update_in_session(&g_update) == 0U);
+
+    /* A long silence must change nothing: no slide back to IDLE. */
+    g_fake.clock_ms += LONG_AFTER_COMMIT_MS;
+    ota_update_tick(&g_update);
+    CHECK(ota_update_in_session(&g_update) == 0U);
+
+    const unsigned erases = g_fake.erase_calls;
+    begin((uint16_t)(next + 1U), IMAGE_SIZE, 0U);
+    CHECK(answered_nak((uint16_t)(next + 1U), OTA_NAK_BAD_STATE));
+    CHECK(g_fake.erase_calls == erases);  /* the committed image survives */
+
+    const unsigned writes = g_fake.program_calls;
+    data((uint16_t)(next + 2U), 0U, g_image, CHUNK);
+    CHECK(answered_nak((uint16_t)(next + 2U), OTA_NAK_BAD_STATE));
+    CHECK(g_fake.program_calls == writes);
+
+    host(OTA_MSG_ABORT, (uint16_t)(next + 3U), NULL, 0U);
+    CHECK(answered_nak((uint16_t)(next + 3U), OTA_NAK_BAD_STATE));
+
+    /* What is running can still be asked, in any state. */
+    host(OTA_MSG_INFO_REQ, (uint16_t)(next + 4U), NULL, 0U);
+    CHECK(g_ans.count == 1U && g_ans.type == OTA_MSG_INFO);
+}
+
 static void data_before_begin_is_refused(void) {
     setup();
     data(1U, 0U, g_image, CHUNK);
@@ -656,6 +705,7 @@ int main(void) {
     the_fake_crc32_is_the_agreed_variant();
     info_req_reports_the_running_image();
     a_whole_update_goes_through();
+    a_committed_session_lets_telemetry_run();
     data_before_begin_is_refused();
     an_image_too_large_is_refused_before_erasing();
     offsets_must_follow_on_exactly();
