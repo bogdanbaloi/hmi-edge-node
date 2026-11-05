@@ -31,7 +31,7 @@ ACCEL_CT_SRC := contract_accel_test.c frame_gate.c ../Src/adxl_report.c \
 TARGETS := contract_frame_test temperature_test fault_test ota_frame_test \
            ota_update_test byte_ring_test crc32_test confirm_record_test \
            option_plan_test adxl345_test adxl_report_test \
-           vibration_test vib_telemetry_test \
+           vibration_test vib_telemetry_test wire_probe_test \
            contract_accel_test
 
 .PHONY: all run clean
@@ -109,27 +109,26 @@ vibration_test: $(VIB_SRC) ../Inc/vibration.h
 vib_telemetry_test: $(STREAM_SRC) ../Inc/vib_telemetry.h
 	$(CC) $(CFLAGS) -o $@ $(STREAM_SRC)
 
+# Is a wire physically there? Pure logic with the pin read injected, so
+# the fake answers from a table AND records every question, because half
+# of what this module gets right is which pull it asks for.
+wire_probe_test: wire_probe_test.c ../Src/wire_probe.c ../Inc/wire_probe.h
+	$(CC) $(CFLAGS) -DBRINGUP_DIAGNOSTIC=1 -o $@ wire_probe_test.c \
+	    ../Src/wire_probe.c
+
 # The two accelerometer frames against the HOST's acceptance rules, with the
 # real modules producing the bytes rather than a stand-in.
 contract_accel_test: $(ACCEL_CT_SRC) frame_gate.h ../Inc/adxl_report.h \
                     ../Inc/vib_telemetry.h
 	$(CC) $(CFLAGS) -o $@ $(ACCEL_CT_SRC)
 
+# Every target, from the one list, rather than a second list beside it.
+# Until 2026-11-05 this rule named each binary by hand, so a test added to
+# TARGETS was BUILT and never RUN, and the suite still said green. A test
+# that nothing executes is worse than no test, because it reads like
+# coverage. One list, and adding a target is enough.
 run: $(TARGETS)
-	./contract_frame_test
-	./temperature_test
-	./fault_test
-	./ota_frame_test
-	./ota_update_test
-	./byte_ring_test
-	./crc32_test
-	./confirm_record_test
-	./option_plan_test
-	./adxl345_test
-	./adxl_report_test
-	./vibration_test
-	./vib_telemetry_test
-	./contract_accel_test
+	@for t in $(TARGETS); do ./$$t || exit 1; done
 
 clean:
 	rm -f $(TARGETS) $(addsuffix .exe,$(TARGETS))

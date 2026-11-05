@@ -25,6 +25,7 @@
 #include "adxl_port.h"
 #include "adxl_report.h"
 #include "board.h"
+#include "bringup.h"
 #include "byte_ring.h"
 #include "core.h"
 #include "crc32.h"
@@ -198,6 +199,13 @@ static void service_accelerometer(adxl_report_state_t *report,
 
 int main(void) {
     bring_up_drivers();
+
+#ifdef BRINGUP_DIAGNOSTIC
+    /* One shot, before anything else touches the bus and before the watchdog
+       starts: a silent bus costs 5 ms per address, and 112 of those is
+       longer than the watchdog would wait. */
+    bringup_report();
+#endif
 
     telemetry_state_t state;
     telemetry_init(&state);

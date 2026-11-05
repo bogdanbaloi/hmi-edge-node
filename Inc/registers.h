@@ -55,6 +55,9 @@
 #define GPIO_MODE_OUTPUT       1U                  /* general-purpose output */
 #define GPIO_MODE_ALTERNATE    2U                  /* a peripheral drives it */
 #define GPIO_PULL_UP           1U
+#define GPIO_MODE_INPUT        0U                  /* read the pin itself   */
+#define GPIO_PULL_NONE         0U                  /* let the pin float     */
+#define GPIO_PULL_DOWN         2U                  /* weak, about 40k       */
 #define GPIO_AF7_USART         7U  /* USART1-3 on AF7, DS10198 Table 17 */
 
 /* ---- GPIOC @ 0x48000800  (PC13 = USER button B1) ---------------------- */
@@ -257,6 +260,7 @@
 #define GPIOB_OTYPER           REG32(0x48000404UL) /* push-pull or open-drain*/
 #define GPIOB_PUPDR            REG32(0x4800040CUL) /* pull-up, 2 bits each   */
 #define GPIOB_AFRH             REG32(0x48000424UL) /* alt function, pins 8-15*/
+#define GPIOB_IDR              REG32(0x48000410UL) /* the level on each pin  */
 
 /* ---- I2C1 ---------------------------------------------------------------
  * Base 0x40005400. This is the v2 peripheral: one TIMINGR holds the whole

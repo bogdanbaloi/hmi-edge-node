@@ -46,6 +46,15 @@ echo "== a real link"
 arm-none-eabi-gcc $FLAGS Src/*.c Startup/startup_stm32l476rgtx.s -o "$out/firmware.elf"
 arm-none-eabi-size "$out/firmware.elf"
 
+echo "== the bring-up diagnostic must still link when it is switched on"
+# A branch behind an #ifdef that nothing ever compiles rots in silence. The
+# switch lives in Inc/bringup.h and ships off, so without this the diagnostic
+# would be found broken on the day somebody needed it, which is always the
+# worst day. Linked, not run: what it does needs a board.
+# shellcheck disable=SC2086
+arm-none-eabi-gcc $FLAGS -DBRINGUP_DIAGNOSTIC=1 Src/*.c     Startup/startup_stm32l476rgtx.s -o "$out/firmware-bringup.elf"
+arm-none-eabi-size "$out/firmware-bringup.elf"
+
 echo "== an image larger than one bank must NOT link"
 # shellcheck disable=SC2086
 if arm-none-eabi-gcc $FLAGS Src/*.c Startup/startup_stm32l476rgtx.s \
@@ -60,4 +69,4 @@ grep -q "region .FLASH. overflowed" "$out/oversize.log" || {
 }
 grep -o "region .FLASH. overflowed by [0-9]* bytes" "$out/oversize.log" | head -1
 
-echo "Both ARM gates pass."
+echo "All three ARM gates pass."
