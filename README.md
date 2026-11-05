@@ -468,6 +468,41 @@ written would be worse than one that says it cannot yet. Receiving costs 476
 bytes of code and 840 of RAM, most of it the 512-byte queue and the parser's
 frame buffer.
 
+### The bug no host test could have found
+
+Every module above is tested on a PC against a fake. That works because the
+fake answers the same questions the real thing does. It stops working when
+the bug is made of TIME, and on 2026-11-05 the accelerometer's bus produced
+exactly that.
+
+A bus scan of 112 addresses reported a device at every third one, 37 in all:
+`09`, `0C`, `0F`, and so on to `75`. No bus looks like that. The clue was in
+the timestamps rather than the addresses: the whole scan finished in under
+5 ms, which is 45 microseconds per probe, and a single address byte at
+100 kHz cannot take less than about 100. The driver was answering before the
+bus had said anything.
+
+The cause is two clocks. The core runs at 4 MHz and the bus at 100 kHz, so
+after a device refuses its address the CPU sees the NACK flag, clears it, and
+clears the stop flag, all within a few microseconds. The stop itself has not
+reached the wires yet. When it does, the peripheral raises the stop flag
+again with nobody left to read it, and the NEXT transfer opens, sees a stop
+flag already standing, and concludes its own stop has happened. It reports
+success without having waited for anything.
+
+The repair is one line: a transfer now starts by clearing what the one before
+it left behind. After it, the same scan answered `scan,none` in 13 ms, which
+is 116 microseconds per probe, and that is what one address byte at 100 kHz
+should cost.
+
+**No fake can produce this.** A fake answers instantly, which is the one thing
+the real peripheral does not do, and the gap between those two speeds IS the
+bug. Nothing in `tests/` touches a register, by design: those addresses do not
+exist on a PC. So this driver's proof is the board, and the before and after
+above is that proof, with a number that physics will not let anybody argue
+with.
+
+
 ## CI
 
 Every push and every pull request runs five jobs, none of which needs a board:

@@ -15,6 +15,20 @@ participant "device\n(ADXL345 at 0x53)" as dev
 app -> drv : address, register number, one byte out
 activate drv
 
+drv -> per : ICR = NACKCF + STOPCF + the error flags
+note left of drv
+  **Every transfer opens by clearing what the
+  last one left standing.** The core is 4 MHz
+  and the bus 100 kHz, so after a NACK the CPU
+  clears STOPF microseconds before the stop
+  reaches the wires, and the peripheral raises
+  it again with nobody reading. Without this
+  line the next transfer sees that flag and
+  reports success having waited for nothing.
+  Found on the board 2026-11-05: a scan said a
+  device sat at every third address.
+end note
+
 drv -> per : CR2 = address, NBYTES 1, write, no AUTOEND, START
 note right of drv
   AUTOEND is deliberately OFF here.

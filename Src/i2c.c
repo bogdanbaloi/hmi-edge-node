@@ -147,6 +147,21 @@ static i2c_status_t wait_for(uint32_t flags) {
  */
 static void begin_transfer(uint8_t address7, uint8_t count, uint32_t read,
                            uint32_t auto_end) {
+    /* Start from a clean status register, because the transfer before this
+       one may have left a flag standing. The core runs at 4 MHz and the bus
+       at 100 kHz, so after a NACK the CPU clears STOPF and moves on microseconds
+       before the stop has actually reached the wires, and the peripheral then
+       raises STOPF again with nobody left to read it. The next transfer sees
+       that flag, believes its own stop already happened, and reports success
+       without having waited for anything.
+
+       Found on the board on 2026-11-05, the first day this driver met real
+       hardware: a bus scan reported a device at every third address, 112
+       transfers in under 5 ms, which is less time than one address byte
+       takes at 100 kHz. No fake can produce this, because the fake answers
+       instantly and the bug is made of the gap between the two clocks. */
+    I2C1_ICR = I2C1_ICR_NACKCF | I2C1_ICR_STOPCF | I2C1_ICR_ANY_ERROR;
+
     I2C1_CR2 = ((uint32_t)address7 << I2C1_CR2_SADD_SHIFT)
                | ((uint32_t)count << I2C1_CR2_NBYTES_SHIFT)
                | read | auto_end | I2C1_CR2_START;
