@@ -468,6 +468,50 @@ written would be worse than one that says it cannot yet. Receiving costs 476
 bytes of code and 840 of RAM, most of it the 512-byte queue and the parser's
 frame buffer.
 
+### `wire_probe_test`: is the wire physically there?
+
+A bus protocol only speaks once the wiring already works. When nothing
+answers, every cause looks the same from inside it. `adxl,absent` is true for
+a dead device, for a device at the other address with its SDO pin floating,
+for a device that came up in SPI mode with CS floating, and for a jumper in
+the hole next door. Four repairs behind one word.
+
+On 2026-11-05 it was the fourth, and three hours went into reading
+photographs of the board, wrongly, three times. The board was then asked
+instead and answered in one line: the data line was on `PC9`, not `PB9`.
+
+The question is answered by comparing two resistors. A sensor module carries
+its own pull-ups to its supply, around 4.7k. The chip has internal pulls of
+its own, around 40k, roughly ten times weaker. So read a pin twice:
+
+| reading | meaning |
+| --- | --- |
+| high alone, high pulled down | something outside holds it. The wire reaches this pin AND the far end has power |
+| high alone, low pulled down | nothing outside. The first reading was leftover charge |
+
+**The floating reading is reported and never believed.** It is the one that
+told us a dead wire was alive. It is read first, because reading it after the
+pull-down would show the pull-down rather than the line.
+
+The deciding, the two digit report and the sweep across every pin are pure
+logic in `Src/wire_probe.c`, so a host test drives them from a table. Only
+the pin read itself touches registers, in `Src/bringup.c`, which is the same
+split every other module in this repository uses.
+
+**The fake had to grow a memory.** A table that answers the same question the
+same way twice cannot tell a module that reads the floating line first from
+one that reads it after the pull-down has wiped it, and a mutant that swapped
+those two reads survived a green test suite because of that. The fake now
+remembers that pulling a loose line down drains it, which is what a real pin
+does, and the mutant dies. Nine mutants, all caught, 59 checks.
+
+**It costs nothing unless it is wanted.** Both files sit behind
+`BRINGUP_DIAGNOSTIC` in `Inc/bringup.h`, which ships off, and the image with
+it off is byte for byte the size it was before any of this existed. Switched
+on it costs 1368 bytes. A third link in `scripts/arm-link-check.sh` compiles
+the switched-on build on every push, because a branch nothing ever compiles
+is found broken on the day somebody needs it, which is always the worst day.
+
 ### The bug no host test could have found
 
 Every module above is tested on a PC against a fake. That works because the

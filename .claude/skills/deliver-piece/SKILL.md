@@ -48,9 +48,10 @@ names the job it stands for.
 
 ```
 mingw32-make -C tests run CC=gcc          # job "Host tests". CI uses gcc
-sh scripts/arm-link-check.sh    # job "Cross-compile for Cortex-M4", both
-                     # halves: a real link, then the oversized image whose
-                     # link MUST FAIL with "region FLASH overflowed"
+sh scripts/arm-link-check.sh    # job "Cross-compile for Cortex-M4", three
+                     # halves: a real link, the same sources with the
+                     # bring-up diagnostic switched on, then the oversized
+                     # image whose link MUST FAIL, "region FLASH overflowed"
 sh scripts/check-public-text.sh <base>..HEAD    # job "Public text"
 clang-tidy over Src/*.c and tests/*.c     # job "Static analysis", same loop
 java -jar plantuml.jar -checkonly docs/uml/*.puml    # job "Docs discipline"

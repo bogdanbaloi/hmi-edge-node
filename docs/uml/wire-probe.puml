@@ -1,0 +1,62 @@
+@startuml wire-probe
+' Is a wire physically there? Grounded in Src/wire_probe.c and in the
+' adapter in Src/bringup.c that gives it the real pin read.
+
+title Two readings of one pin, and a comparison of two resistors
+
+skinparam shadowing false
+
+start
+
+note right
+  **The question no protocol can ask.**
+  A bus only speaks once the wiring works.
+  When nothing answers, a dead device, a
+  device at another address, a device in
+  SPI mode and a jumper in the hole next
+  door all look the same from inside the
+  protocol. Four repairs behind one word.
+end note
+
+:read the pin with NO pull;
+note right
+  Reported, never the verdict. A pin left
+  alone shows whatever charge is still on
+  it, which is why a jumper that reaches
+  nothing so often reads high.
+  Read FIRST: after a pull-down it would
+  show the pull-down instead of the line.
+end note
+
+:read the same pin while the chip pulls it DOWN;
+
+if (still high?) then (yes)
+  :**WIRE_HELD**;
+  note right
+    Something outside wins. The module's
+    own pull-up is about 4.7k, the chip's
+    pull-down about 40k, ten times weaker.
+    So the wire reaches this pin AND the
+    thing at the far end has power.
+  end note
+  stop
+else (no)
+  :**WIRE_LOOSE**;
+  note right
+    Nothing outside. The wire goes
+    somewhere else, or is broken, or the
+    module has no supply.
+  end note
+  stop
+endif
+
+legend bottom
+  The deciding, the two digit report and the sweep are pure logic in
+  wire_probe.c, tested on a PC against a fake that REMEMBERS: a pull-down
+  drains a loose line, so reading in the wrong order gives the wrong answer.
+  59 checks, 9 mutants. A stateless fake let the ordering mutant survive.
+  Only the pin read itself is on the board, in bringup.c, and it costs
+  nothing in a shipping image because both files sit behind one switch.
+endlegend
+
+@enduml
