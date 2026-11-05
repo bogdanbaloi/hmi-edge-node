@@ -156,12 +156,24 @@ static uint32_t read_pin(void *ctx, uint8_t port, uint8_t pin,
     const uint32_t chip_pull =
         (pull == WIRE_PULL_DOWN) ? GPIO_PULL_DOWN : GPIO_PULL_NONE;
 
+    /* Put the pin back the way it was found. Raised in review of PR 35: a
+       sweep that leaves every pin it touched as an input with a pull-down is
+       not where the board started, and on the L4 the reset state is analog,
+       which is the state that draws nothing. Only the two bits of this pin
+       are kept and restored, so nothing else in the port is disturbed. */
+    const uint32_t mode_was = *moder & GPIO_MODE_MASK(pin);
+    const uint32_t pull_was = *pupdr & GPIO_PULL_MASK(pin);
+
     *moder = (*moder & ~GPIO_MODE_MASK(pin)) | GPIO_MODE(pin, GPIO_MODE_INPUT);
     *pupdr = (*pupdr & ~GPIO_PULL_MASK(pin)) | GPIO_PULL(pin, chip_pull);
     for (volatile uint32_t spin = 0U; spin < SETTLE_SPINS; spin++) {
         /* let the line settle */
     }
-    return (*idr >> pin) & 1U;
+    const uint32_t level = (*idr >> pin) & 1U;
+
+    *pupdr = (*pupdr & ~GPIO_PULL_MASK(pin)) | pull_was;
+    *moder = (*moder & ~GPIO_MODE_MASK(pin)) | mode_was;
+    return level;
 }
 
 static const wire_bus_t k_wires = {NULL, read_pin};
@@ -247,7 +259,10 @@ void bringup_report(void) {
     wire_probe_report(&k_wires, "wscl", PORT_B, SCL_PIN, uart_send_string);
     wire_probe_report(&k_wires, "wsda", PORT_B, SDA_PIN, uart_send_string);
     (void)wire_probe_sweep(&k_wires, k_ports, PORT_COUNT, uart_send_string);
-    i2c1_init(); /* the sweep left those pins as plain inputs */
+    /* read_pin restores each pin itself, so this is belt and braces rather
+       than the repair. Kept because the two I2C pins are the ones whose
+       wrong state would be silent: the bus would simply never answer. */
+    i2c1_init();
 
     if (scan_the_bus() != 0U) {
         report_devid(ADXL345_ADDRESS_SDO_LOW);
